@@ -72,9 +72,10 @@ async function verifyTelebirrReceipt(reference) {
       return { success: false, error: 'Could not extract a valid amount from the receipt.' };
     }
 
-    const OUR_RECEIVER_NAME = 'KENAW NURU MOHABE';
+    const VALID_RECEIVER_NAMES = ['KEDIR SHIFAW KEBEDE', 'KEDIR SHIFAW'];
     const receiverName = receipt.creditedPartyName || '';
-    if (receiverName && !receiverName.toUpperCase().includes(OUR_RECEIVER_NAME)) {
+    const isValidName = VALID_RECEIVER_NAMES.some(name => receiverName.toUpperCase().includes(name));
+    if (receiverName && !isValidName) {
       return { 
         success: false, 
         error: `Receipt was sent to ${receiverName}, not to our platform account.` 
