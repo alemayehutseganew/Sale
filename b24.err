@@ -1,0 +1,23 @@
+[31m✗[39m Build failed in 864ms
+[31merror during build:
+[31mBuild failed with 1 error:
+
+[31m[builtin:vite-transform] [0mEmpty parenthesized expression
+    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/pages/Lobby.jsx:89:25 [38;5;246m][0m
+    [38;5;246m│[0m
+ [38;5;246m89 │[0m ╭─▶ [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m{[0m[38;5;249mi[0m[38;5;249md[0m[38;5;249mx[0m[38;5;249m [0m[38;5;249m<[0m[38;5;249m [0m[38;5;249m2[0m[38;5;249m [0m[38;5;249m&[0m[38;5;249m&[0m[38;5;249m [0m(
+ [38;5;240m   ┆[0m ┆   
+ [38;5;246m91 │[0m ├─▶             )[38;5;249m}[0m
+ [38;5;240m   │[0m │                     
+ [38;5;240m   │[0m ╰───────────────────── 
+[38;5;246m────╯[0m
+[31m
+    at aggregateBindingErrorsIntoJsError (file:///C:/Users/alexo/Desktop/File/Code/GO-BINGO/frontend/node_modules/rolldown/dist/shared/error-BJ9uQLIS.mjs:50:18)
+    at unwrapBindingResult (file:///C:/Users/alexo/Desktop/File/Code/GO-BINGO/frontend/node_modules/rolldown/dist/shared/error-BJ9uQLIS.mjs:20:128)
+    at #build (file:///C:/Users/alexo/Desktop/File/Code/GO-BINGO/frontend/node_modules/rolldown/dist/shared/rolldown-DWd2aEL4.mjs:146:34)
+    at async buildEnvironment (file:///C:/Users/alexo/Desktop/File/Code/GO-BINGO/frontend/node_modules/vite/dist/node/chunks/node.js:34849:66)
+    at async Object.build (file:///C:/Users/alexo/Desktop/File/Code/GO-BINGO/frontend/node_modules/vite/dist/node/chunks/node.js:35270:19)
+    at async Object.buildApp (file:///C:/Users/alexo/Desktop/File/Code/GO-BINGO/frontend/node_modules/vite/dist/node/chunks/node.js:35267:153)
+    at async CAC.<anonymous> (file:///C:/Users/alexo/Desktop/File/Code/GO-BINGO/frontend/node_modules/vite/dist/node/cli.js:790:3) {
+  errors: [Getter/Setter]
+}[39m
