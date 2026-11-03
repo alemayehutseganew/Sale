@@ -86,7 +86,7 @@ router.get('/stats', adminAuth, async (req, res) => {
 
     const wageredResult = await db('financial_ledger')
       .where({ type: 'ENTRY_FEE' })
-      .sum(db.raw('ABS(amount) as total'))
+      .sum({ total: db.raw('ABS(amount)') })
       .first()
     const totalWagered = parseFloat(wageredResult.total || 0).toFixed(2)
 
@@ -106,7 +106,7 @@ router.get('/stats', adminAuth, async (req, res) => {
       platformProfit,
     })
   } catch (err) {
-    console.error('Stats error:', err)
+    console.error('[Admin] Stats error:', err.message, err)
     res.status(500).json({ error: 'Failed to fetch stats' })
   }
 })
@@ -126,6 +126,7 @@ router.get('/users', adminAuth, async (req, res) => {
     const total = await db('users').count('* as c').first()
     res.json({ users, total: Number(total.c), page, limit })
   } catch (err) {
+    console.error('[Admin] Users fetch error:', err.message, err)
     res.status(500).json({ error: err.message })
   }
 })
