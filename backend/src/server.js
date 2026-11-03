@@ -14,13 +14,23 @@ const { launch: launchBot } = require('./bot')
 
 const app = express()
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://guatimala.vercel.app',
+  'https://guatimala-git-main-alemayehutseganews-projects.vercel.app',
+  'https://frontend-five-sigma-72.vercel.app'
+]
+
 const corsOptions = {
-  origin: [
-    'http://localhost:5173',
-    'https://guatimala.vercel.app',
-    'https://guatimala-git-main-alemayehutseganews-projects.vercel.app',
-    'https://frontend-five-sigma-72.vercel.app'
-  ],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+      return
+    }
+
+    console.log('Blocked by CORS:', origin)
+    callback(new Error('Not allowed by CORS'))
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-telegram-init-data', 'x-admin-seed-token']
