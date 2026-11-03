@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useWallet } from '../WalletContext'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 export default function Wallet() {
   const navigate = useNavigate()
+  const { balance, loading, refreshBalance } = useWallet()
   const [user, setUser] = useState(null)
-  const [balance, setBalance] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('')
   const [depositAmount, setDepositAmount] = useState('')
@@ -26,43 +27,31 @@ export default function Wallet() {
       if (res.ok) {
         const data = await res.json()
         setUser(data)
-        setBalance(Number(data.wallet_balance || 0))
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Failed to load user:', err)
+    }
   }
 
   useEffect(() => {
-    const storedUserId = localStorage.getItem('dbUserId')
-    if (!storedUserId) {
+    if (!localStorage.getItem('dbUserId')) {
       navigate('/')
-      return
     }
-
-    const fetchBalance = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/wallet/balance?userId=${userId}&t=${Date.now()}`, {
-          cache: 'no-store',
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setBalance(Number(data.balance || 0))
-        }
-      } catch (err) {
-        console.error('Failed to fetch balance:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchBalance()
   }, [navigate])
 
   useEffect(() => {
     loadUser()
   }, [token])
 
+  useEffect(() => {
+    refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
+    const onFocus = () => refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refreshBalance])
+
   const deposit = async () => {
-    setLoading(true)
+    setSubmitting(true)
     setMessage('')
     setMessageType('')
     try {
@@ -76,6 +65,7 @@ export default function Wallet() {
         setMessage('Deposit verified successfully!')
         setMessageType('success')
         loadUser()
+        refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
       } else {
         setMessage(data.error || 'Verification failed')
         setMessageType('error')
@@ -84,12 +74,12 @@ export default function Wallet() {
       setMessage('Network error')
       setMessageType('error')
     } finally {
-      setLoading(false)
+      setSubmitting(false)
     }
   }
 
   const withdraw = async () => {
-    setLoading(true)
+    setSubmitting(true)
     setMessage('')
     setMessageType('')
     try {
@@ -103,6 +93,7 @@ export default function Wallet() {
         setMessage(data.message || 'Withdrawal submitted')
         setMessageType('success')
         loadUser()
+        refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
       } else {
         setMessage(data.error || 'Withdrawal failed')
         setMessageType('error')
@@ -111,7 +102,7 @@ export default function Wallet() {
       setMessage('Network error')
       setMessageType('error')
     } finally {
-      setLoading(false)
+      setSubmitting(false)
     }
   }
 
@@ -172,7 +163,7 @@ export default function Wallet() {
         </div>
         <button
           onClick={deposit}
-          disabled={loading}
+          disabled={loading || submitting}
           className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-[#0f2027] font-bold py-2 rounded disabled:opacity-50 mt-2"
         >
           Verify & Deposit
@@ -199,7 +190,7 @@ export default function Wallet() {
         />
         <button
           onClick={withdraw}
-          disabled={loading}
+          disabled={loading || submitting}
           className="w-full bg-gradient-to-r from-yellow-400 to-orange-500 text-[#0f2027] font-bold py-2 rounded disabled:opacity-50 mt-2"
         >
           Withdraw

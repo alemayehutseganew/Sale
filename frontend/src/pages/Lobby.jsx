@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLanguage } from '../LanguageContext'
 import { API_BASE } from '../services/api'
+import { useWallet } from '../WalletContext'
+import SocketService from '../services/socket'
 
 const stakes = [10, 50, 100]
 
@@ -28,32 +30,21 @@ export default function Lobby() {
   const navigate = useNavigate()
   const { t, i18n } = useTranslation()
   const { changeLanguage } = useLanguage()
+  const { balance: walletBalance, refreshBalance } = useWallet()
 
-  const [walletBalance, setWalletBalance] = useState(0)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
-
-  useEffect(() => {
-    const fetchBalance = () => {
-      const userId = localStorage.getItem('dbUserId')
-      if (!userId) return
-
-      fetch(`${API_BASE}/api/wallet/balance?userId=${userId}&t=${Date.now()}`, { cache: 'no-store' })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data) setWalletBalance(Number(data.balance ?? 0))
-        })
-        .catch((err) => console.error('Failed to fetch balance:', err))
-    }
-
-    fetchBalance()
-    window.addEventListener('focus', fetchBalance)
-    return () => window.removeEventListener('focus', fetchBalance)
-  }, [])
 
   const toggleLanguage = () => {
     changeLanguage(i18n.language === 'en' ? 'am' : 'en')
   }
+
+  useEffect(() => {
+    refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
+    const onFocus = () => refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refreshBalance])
 
   const handleJoin = async (stake) => {
     try {
@@ -90,6 +81,7 @@ export default function Lobby() {
 
   const handleLogout = () => {
     localStorage.clear()
+    SocketService.connect(null)
     if (window.Telegram?.WebApp) {
       window.Telegram.WebApp.close()
     } else {

@@ -8,6 +8,8 @@ import Settings from './pages/Settings'
 import GameHistory from './pages/GameHistory'
 import Leaderboard from './pages/Leaderboard'
 import { LanguageProvider } from './LanguageContext'
+import { WalletProvider } from './WalletContext'
+import SocketService from './services/socket'
 import AdminLogin from './admin/AdminLogin'
 import AdminLayout from './admin/AdminLayout'
 import AdminDashboard from './admin/AdminDashboard'
@@ -38,6 +40,8 @@ export default function App() {
           localStorage.setItem('token', data.token)
           localStorage.setItem('dbUserId', data.user.id)
           localStorage.setItem('walletBalance', data.user.wallet_balance)
+          SocketService.connect(data.token)
+          window.dispatchEvent(new Event('wallet-refresh'))
         }
       })
       .catch(() => {})
@@ -45,31 +49,32 @@ export default function App() {
 
   return (
     <LanguageProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Lobby />} />
-          <Route path="/card-selection" element={<CardSelection />} />
-          <Route path="/select-cards" element={<CardSelection />} />
-          <Route path="/game" element={<GameScreen />} />
-          <Route path="/wallet" element={<Wallet />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/history" element={<GameHistory />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-        <Route path="/admin/login" element={<AdminLogin />} />
-        <Route
-          path="/admin"
-          element={localStorage.getItem('adminToken') ? <AdminLayout /> : <Navigate to="/admin/login" />}
-        >
-          <Route index element={<Navigate to="dashboard" />} />
-          <Route path="dashboard" element={<AdminDashboard />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="games" element={<AdminGames />} />
-          <Route path="payments" element={<AdminPayments />} />
-        </Route>
+      <WalletProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Lobby />} />
+            <Route path="/card-selection" element={<CardSelection />} />
+            <Route path="/select-cards" element={<CardSelection />} />
+            <Route path="/game" element={<GameScreen />} />
+            <Route path="/wallet" element={<Wallet />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/history" element={<GameHistory />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route
+              path="/admin"
+              element={localStorage.getItem('adminToken') ? <AdminLayout /> : <Navigate to="/admin/login" />}
+            >
+              <Route index element={<Navigate to="dashboard" />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="users" element={<AdminUsers />} />
+              <Route path="games" element={<AdminGames />} />
+              <Route path="payments" element={<AdminPayments />} />
+            </Route>
 
-        </Routes>
-      </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
+      </WalletProvider>
     </LanguageProvider>
   )
 }
-

@@ -4,9 +4,13 @@ import { API_BASE } from './api'
 let socket = null
 
 const SocketService = {
-  connect: () => {
+  connect: (token = localStorage.getItem('token')) => {
     if (!socket) {
-      socket = io(API_BASE, { transports: ['websocket'] })
+      socket = io(API_BASE, { transports: ['websocket'], auth: { token } })
+    } else if (socket.auth?.token !== token) {
+      socket.auth = { token }
+      socket.disconnect()
+      socket.connect()
     }
     return socket
   },
