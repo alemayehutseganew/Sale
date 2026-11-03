@@ -1,13 +1,12 @@
 import { io } from 'socket.io-client'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { API_BASE } from './api'
 
 let socket = null
 
 const SocketService = {
   connect: () => {
     if (!socket) {
-      socket = io(API_URL, { transports: ['websocket'] })
+      socket = io(API_BASE, { transports: ['websocket'] })
     }
     return socket
   },

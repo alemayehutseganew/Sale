@@ -38,7 +38,7 @@ export default function Lobby() {
       const userId = localStorage.getItem('dbUserId')
       if (!userId) return
 
-      fetch(`${API_BASE}/api/wallet/balance?userId=${userId}&t=${Date.now()}`)
+      fetch(`${API_BASE}/api/wallet/balance?userId=${userId}&t=${Date.now()}`, { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data) setWalletBalance(Number(data.balance ?? 0))

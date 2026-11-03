@@ -40,7 +40,9 @@ export default function Wallet() {
 
     const fetchBalance = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/wallet/balance?userId=${userId}&t=${Date.now()}`)
+        const res = await fetch(`${API_BASE}/api/wallet/balance?userId=${userId}&t=${Date.now()}`, {
+          cache: 'no-store',
+        })
         if (res.ok) {
           const data = await res.json()
           setBalance(Number(data.balance || 0))
