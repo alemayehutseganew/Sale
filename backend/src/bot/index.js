@@ -1,5 +1,4 @@
-const { Telegraf } = require('telegraf')
-const { Markup } = require('telegraf')
+const { Telegraf, Markup } = require('telegraf')
 const db = require('../db')
 const { parseTelebirrSMS, verifyTelebirrReceipt } = require('../services/paymentService')
 
@@ -117,9 +116,9 @@ bot.command('help', (ctx) => {
 
 bot.command('register', (ctx) => {
   return ctx.reply(
-    'Please share your phone number to complete registration:',
+    'To complete your registration, please share your phone number:',
     Markup.keyboard([
-      [Markup.button.contactRequest('📱 Share Contact')]
+      [Markup.button.contactRequest('📱 Share Phone Number')]
     ]).resize().oneTime()
   )
 })
