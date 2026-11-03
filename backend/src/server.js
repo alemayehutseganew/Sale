@@ -46,6 +46,7 @@ app.get('/health', (req, res) => {
 
 app.use('/api/auth', authRoutes)
 app.use('/api/rooms', roomRoutes)
+console.log('✅ API routes mounted: /api/auth, /api/rooms')
 app.use('/api/payments', paymentsRoutes)
 app.use('/api/wallet', walletRoutes)
 app.use('/api/users', usersRoutes)
