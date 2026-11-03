@@ -84,12 +84,36 @@ router.post('/join', async (req, res) => {
         console.log(`[JOIN] User ${user.id} was already in room. Join skipped.`)
       }
 
+      // 6. ENSURE USER HAS A CARD (auto-assign to remove confirm step)
+      let cardSelection = await trx('room_card_selections')
+        .where({ room_id: room.id, user_id: user.id })
+        .first()
+      if (!cardSelection) {
+        const cardId = Math.floor(Math.random() * 400) + 1
+        const matrix = generateSingleCard()
+        const [inserted] = await trx('room_card_selections').insert({
+          room_id: room.id,
+          card_id: cardId,
+          user_id: user.id,
+          card: JSON.stringify(matrix),
+          status: 'reserved',
+        }).returning('*')
+        cardSelection = inserted
+        console.log(`[JOIN] Auto-assigned card ${cardId} to user ${user.id}.`)
+      }
+
       console.log('[join] Transaction successful')
-      return { room }
+      return {
+         room,
+         card: {
+           id: cardSelection.card_id,
+           matrix: typeof cardSelection.card === 'string' ? JSON.parse(cardSelection.card) : cardSelection.card,
+         },
+       }
     })
 
     console.log('[join] Sending response:', result.room.id)
-    return res.json({ roomId: result.room.id, stake: result.room.stake_amount })
+    return res.json({ roomId: result.room.id, stake: result.room.stake_amount, card: result.card })
 
   } catch (err) {
     console.error('[join] CATCH ERROR:', err.message)
