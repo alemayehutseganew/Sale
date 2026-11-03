@@ -84,6 +84,9 @@ async function start() {
     console.log('✅ Database migrations completed.')
   } catch (err) {
     console.error('❌ Migration failed:', err.message)
+    await db.destroy()
+    process.exitCode = 1
+    return
   }
 
   server.listen(PORT, '0.0.0.0', () => {
