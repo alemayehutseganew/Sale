@@ -1,9 +1,11 @@
 const db = require('../db')
 const { validateBingo } = require('../utils/bingoValidator')
 const { Server } = require('socket.io')
+const jwt = require('jsonwebtoken')
 const { bot } = require('../bot/index')
 
 const rooms = {}
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
 const roomStatusRank = { WAITING: 0, COUNTDOWN: 1, PLAYING: 2, CLAIMING: 3, ENDED: 4 }
 const MAX_ROOM_PLAYERS = 10
 
@@ -228,6 +230,10 @@ async function startCountdown(io, roomId) {
 
 function initGameHandler(io) {
   io.on('connection', (socket) => {
+    if (socket.data.userId) {
+      socket.join(`user_${socket.data.userId}`)
+    }
+
     socket.on('join_room', async ({ roomId, userId, stake }) => {
       try {
         let user = null
@@ -599,6 +605,18 @@ function initGameHandler(io) {
 function setupSocket(server) {
   const io = new Server(server, {
     cors: { origin: true, methods: ['GET', 'POST'], credentials: true },
+  })
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token
+    if (!token) return next()
+
+    try {
+      const payload = jwt.verify(token, JWT_SECRET)
+      if (payload.id) socket.data.userId = payload.id
+    } catch (err) {
+      console.warn('[Socket] Invalid auth token; connecting without wallet updates:', err.message)
+    }
+    next()
   })
   initGameHandler(io)
   return io

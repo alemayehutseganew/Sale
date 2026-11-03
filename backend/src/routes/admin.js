@@ -170,6 +170,14 @@ router.post('/users/:id/adjust-balance', adminAuth, async (req, res) => {
 
       return trx('users').where({ id: user.id }).first()
     })
+    const io = req.app.get('io')
+    if (io) {
+      io.to(`user_${updated.id}`).emit('wallet_updated', {
+        newBalance: Number(updated.wallet_balance),
+      })
+    } else {
+      console.error('Socket.IO server unavailable; wallet update notification was not sent.')
+    }
     res.json({ success: true, user: updated })
   } catch (err) {
     res.status(err.statusCode || 500).json({ error: err.message })

@@ -15,51 +15,73 @@ const { launch: launchBot } = require('./bot')
 
 const app = express()
 
-const allowedOrigins = [
+// --- App hardening ---
+app.disable('x-powered-by')
+app.set('trust proxy', 1) // Enzonic sits behind a proxy (needed for correct req.ip / rate limits)
+
+// --- CORS ---
+const configuredOrigins = [
   'http://localhost:5173',
-  'https://frontend-five-sigma-72.vercel.app'
-]
+  'http://localhost:3000',
+  process.env.FRONTEND_URL
+].filter(Boolean)
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
-      callback(null, true)
-      return
-    }
-
+    // Allow server-to-server / curl / Telegram WebView requests with no Origin header
+    if (!origin) return callback(null, true)
+    if (configuredOrigins.includes(origin)) return callback(null, true)
+    // Allow Vercel preview deployments (e.g. frontend-git-branch.vercel.app)
+    if (origin.endsWith('.vercel.app')) return callback(null, true)
     console.log('Blocked by CORS:', origin)
-    callback(new Error('Not allowed by CORS'))
+    return callback(new Error('Not allowed by CORS'))
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-telegram-init-data', 'x-admin-seed-token']
 }
+
+// cors() already answers OPTIONS preflight requests — no app.options() needed.
 app.use(cors(corsOptions))
-app.options(/.*/, cors(corsOptions))
-app.use(express.json())
+app.use(express.json({ limit: '1mb' }))
+
+// --- Health check ---
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+})
+
+// --- API routes ---
+app.use('/api/auth', authRoutes)
+app.use('/api/rooms', roomRoutes)
+app.use('/api/payments', paymentsRoutes)
+app.use('/api/wallet', walletRoutes)
+app.use('/api/users', usersRoutes)
+app.use('/api/admin', adminRoutes)
+console.log('✅ API routes mounted: /api/auth, /api/rooms, /api/payments, /api/wallet, /api/users, /api/admin')
+
+// --- 404 (must come after all routes) ---
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' })
+})
+
+// --- Global error handler (must be the LAST middleware) ---
+// Express forwards errors from express.json() and any route via next(err) to this handler.
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     console.error('Invalid JSON payload:', err.message)
     return res.status(400).json({ error: 'Invalid JSON payload' })
   }
-  next(err)
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS: origin not allowed' })
+  }
+  console.error('Unhandled error:', err)
+  res.status(500).json({ error: 'Internal server error' })
 })
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
-})
-
-app.use('/api/auth', authRoutes)
-app.use('/api/rooms', roomRoutes)
-console.log('✅ API routes mounted: /api/auth, /api/rooms')
-app.use('/api/payments', paymentsRoutes)
-app.use('/api/wallet', walletRoutes)
-app.use('/api/users', usersRoutes)
-app.use('/api/admin', adminRoutes)
-console.log('✅ Admin routes mounted at /api/admin')
-
+// --- HTTP + Socket.io ---
 const server = http.createServer(app)
 const io = setupSocket(server)
+app.set('io', io)
 
 // Optional Redis adapter for horizontal scaling
 if (process.env.REDIS_URL) {
@@ -73,7 +95,7 @@ if (process.env.REDIS_URL) {
         io.adapter(createAdapter(pubClient, subClient))
         console.log('✅ Redis adapter connected for Socket.io scaling')
       })
-      .catch((err) => console.error('Redis adapter error:', err))
+      .catch((err) => console.error('❌ Redis adapter error:', err))
   } catch (err) {
     console.log('⚠️ Redis packages not installed. Using in-memory adapter.')
   }
@@ -89,14 +111,43 @@ async function start() {
     await db.migrate.latest()
     console.log('✅ Database migrations completed successfully.')
   } catch (err) {
+    // Fail fast: starting the server on a stale schema risks corrupt game/payout state.
     console.error('❌ MIGRATION FAILED:', err.message)
+    process.exit(1)
   }
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`)
-    launchBot()
+    try {
+      launchBot()
+      console.log('🤖 Telegram bot launched')
+    } catch (err) {
+      console.error('❌ Bot launch failed:', err.message)
+    }
   })
 }
+
+// --- Graceful shutdown (important for real-money: avoid mid-transaction kills) ---
+function shutdown(signal) {
+  console.log(`\n${signal} received. Shutting down gracefully...`)
+  io.close(() => {
+    server.close(() => {
+      db.destroy()
+        .catch((err) => console.error('DB destroy error:', err))
+        .finally(() => {
+          console.log('👋 Shutdown complete')
+          process.exit(0)
+        })
+    })
+  })
+  // Hard exit if something hangs
+  setTimeout(() => {
+    console.error('❌ Forced shutdown after timeout')
+    process.exit(1)
+  }, 10_000).unref()
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'))
+process.on('SIGINT', () => shutdown('SIGINT'))
 
 start()
 
