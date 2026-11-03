@@ -17,14 +17,12 @@ const app = express()
 
 const allowedOrigins = [
   'http://localhost:5173',
-  'https://guatimala.vercel.app',
-  'https://guatimala-git-main-alemayehutseganews-projects.vercel.app',
   'https://frontend-five-sigma-72.vercel.app'
 ]
 
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true)
       return
     }
@@ -39,6 +37,13 @@ const corsOptions = {
 app.use(cors(corsOptions))
 app.options(/.*/, cors(corsOptions))
 app.use(express.json())
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error('Invalid JSON payload:', err.message)
+    return res.status(400).json({ error: 'Invalid JSON payload' })
+  }
+  next(err)
+})
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
