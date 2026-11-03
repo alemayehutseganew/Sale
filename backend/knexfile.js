@@ -1,7 +1,5 @@
-if (process.env.NODE_ENV !== 'production') {
-  const path = require('path');
-  require('dotenv').config({ path: path.resolve(__dirname, '.env'), quiet: true });
-}
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env'), quiet: true });
 
 function buildConfig() {
   const base = {

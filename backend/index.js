@@ -1,7 +1,5 @@
 
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config({ quiet: true });
-}
+require('dotenv').config({ quiet: true });
 
 const express = require('express')
 const cors = require('cors')

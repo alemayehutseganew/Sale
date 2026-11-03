@@ -1,8 +1,11 @@
 const knex = require('knex')
 
 let dbUrl = process.env.DATABASE_URL || ''
-if (dbUrl.includes('sslmode=require')) {
-  dbUrl = dbUrl.replace('sslmode=require', 'sslmode=verify-full')
+// Normalize all weak SSL modes to verify-full to prevent pg-connection-string warnings
+for (const mode of ['sslmode=prefer', 'sslmode=require', 'sslmode=verify-ca']) {
+  if (dbUrl.includes(mode)) {
+    dbUrl = dbUrl.replace(mode, 'sslmode=verify-full')
+  }
 }
 process.env.DATABASE_URL = dbUrl
 

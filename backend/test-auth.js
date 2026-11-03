@@ -1,6 +1,4 @@
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config({ quiet: true });
-}
+require('dotenv').config({ quiet: true });
 
 // Ensure a bot token is available for the test (override if not set)
 if (!process.env.TELEGRAM_BOT_TOKEN) {
