@@ -9,6 +9,7 @@ const paymentsRoutes = require('./routes/payments')
 const walletRoutes = require('./routes/wallet')
 const usersRoutes = require('./routes/users')
 const adminRoutes = require('./routes/admin')
+const db = require('./db')
 const { setupSocket } = require('./sockets/gameHandler')
 const { launch: launchBot } = require('./bot')
 
@@ -74,9 +75,24 @@ if (process.env.REDIS_URL) {
 }
 
 const PORT = process.env.PORT || 3001
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-  launchBot()
-})
 
-module.exports = { app, server }
+async function start() {
+  try {
+    console.log('Running database migrations...')
+    await db.migrate.latest()
+    console.log('Database migrations completed successfully.')
+
+    server.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`)
+      launchBot()
+    })
+  } catch (err) {
+    console.error('Database migration error:', err)
+    await db.destroy()
+    process.exitCode = 1
+  }
+}
+
+start()
+
+module.exports = { app, server, start }
