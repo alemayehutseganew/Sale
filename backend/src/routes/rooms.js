@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const db = require('../db')
 const { generateSingleCard } = require('../utils/cardGenerator')
+const MAX_ROOM_PLAYERS = 10
 
 // GET /api/rooms (list waiting rooms)
 router.get('/', async (req, res) => {
@@ -33,9 +34,36 @@ router.post('/join', async (req, res) => {
     // 3. START TRANSACTION
     const result = await db.transaction(async (trx) => {
       console.log('[join] Transaction started')
+      await trx.raw('SELECT pg_advisory_xact_lock(hashtext(?))', [`game_rooms:${stake}`])
 
       // 4. FIND OR CREATE ROOM
-      let room = await trx('game_rooms').where({ stake_amount: stake, status: 'WAITING' }).forUpdate().first()
+      const waitingRooms = await trx('game_rooms')
+        .where({ stake_amount: stake, status: 'WAITING' })
+        .orderBy('created_at')
+        .forUpdate()
+      let room = null
+      let existing = null
+
+      for (const waitingRoom of waitingRooms) {
+        const existingParticipant = await trx('room_participants')
+          .where({ room_id: waitingRoom.id, user_id: user.id })
+          .first()
+        if (existingParticipant) {
+          room = waitingRoom
+          existing = existingParticipant
+          break
+        }
+
+        const participantCount = await trx('room_participants')
+          .where({ room_id: waitingRoom.id })
+          .count('* as count')
+          .first()
+        if (Number(participantCount.count) < MAX_ROOM_PLAYERS) {
+          room = waitingRoom
+          break
+        }
+      }
+
       console.log('[join] Room found/created:', room ? room.id : 'Creating new room')
 
       if (!room) {
@@ -49,8 +77,6 @@ router.post('/join', async (req, res) => {
       }
 
       // 5. CHECK IF ALREADY IN ROOM
-      const existing = await trx('room_participants').where({ room_id: room.id, user_id: user.id }).first()
-
       if (!existing) {
         await trx('room_participants').insert({ room_id: room.id, user_id: user.id, is_winner: false })
         console.log(`[JOIN] Added user ${user.id} to room ${room.id}.`)
@@ -72,17 +98,39 @@ router.post('/join', async (req, res) => {
 })
 
 // GET /api/rooms/:roomId/cards
-router.get('/:roomId/cards', (req, res) => {
-  const cards = []
-  for (let i = 1; i <= 400; i++) {
-    cards.push({
-      id: i,
-      card_number: i,
-      taken: false,
-      matrix: generateSingleCard(),
-    })
+router.get('/:roomId/cards', async (req, res) => {
+  try {
+    const { roomId } = req.params
+    const { userId } = req.query
+    if (!userId) return res.status(400).json({ error: 'userId is required' })
+
+    let user = await db('users').where({ id: userId }).first()
+    if (!user) user = await db('users').where({ telegram_id: userId }).first()
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const room = await db('game_rooms').where({ id: roomId }).first()
+    if (!room) return res.status(404).json({ error: 'Room not found' })
+    if (!['WAITING', 'COUNTDOWN'].includes(room.status)) {
+      return res.status(409).json({ error: 'Game in progress. Please wait for the next round.' })
+    }
+
+    const participant = await db('room_participants').where({ room_id: roomId, user_id: user.id }).first()
+    if (!participant) return res.status(403).json({ error: 'Join the room before selecting cards.' })
+
+    const cards = []
+    for (let i = 1; i <= 400; i++) {
+      cards.push({
+        id: i,
+        card_number: i,
+        taken: false,
+        matrix: generateSingleCard(),
+      })
+    }
+    return res.json(cards)
+  } catch (err) {
+    console.error('[cards] Failed to generate room cards:', err)
+    return res.status(500).json({ error: 'Failed to load cards' })
   }
-  res.json(cards)
 })
 
 // POST /api/rooms/:id/cards/:cardId
@@ -91,8 +139,17 @@ router.post('/:id/cards/:cardId', async (req, res) => {
     const { id: roomId, cardId } = req.params
     const { userId } = req.body
 
-    const user = await db('users').where({ id: userId }).first()
+    let user = await db('users').where({ id: userId }).first()
+    if (!user) user = await db('users').where({ telegram_id: userId }).first()
     if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const room = await db('game_rooms').where({ id: roomId }).first()
+    if (!room) return res.status(404).json({ error: 'Room not found' })
+    if (!['WAITING', 'COUNTDOWN'].includes(room.status)) {
+      return res.status(409).json({ error: 'Game in progress. Please wait for the next round.' })
+    }
+    const participant = await db('room_participants').where({ room_id: roomId, user_id: user.id }).first()
+    if (!participant) return res.status(403).json({ error: 'Join the room before selecting cards.' })
 
     const matrix = generateSingleCard()
 
@@ -120,12 +177,24 @@ router.post('/:id/select-cards', async (req, res) => {
       return res.status(400).json({ error: 'userId and cardIds are required' })
     }
 
-    await db('room_card_selections').where({ room_id: roomId, user_id: userId }).del()
+    let user = await db('users').where({ id: userId }).first()
+    if (!user) user = await db('users').where({ telegram_id: userId }).first()
+    if (!user) return res.status(404).json({ error: 'User not found' })
+
+    const room = await db('game_rooms').where({ id: roomId }).first()
+    if (!room) return res.status(404).json({ error: 'Room not found' })
+    if (!['WAITING', 'COUNTDOWN'].includes(room.status)) {
+      return res.status(409).json({ error: 'Game in progress. Please wait for the next round.' })
+    }
+    const participant = await db('room_participants').where({ room_id: roomId, user_id: user.id }).first()
+    if (!participant) return res.status(403).json({ error: 'Join the room before selecting cards.' })
+
+    await db('room_card_selections').where({ room_id: roomId, user_id: user.id }).del()
 
     const rows = cardIds.map((cardId) => ({
       room_id: roomId,
       card_id: cardId,
-      user_id: userId,
+      user_id: user.id,
       card: JSON.stringify(generateSingleCard()),
       status: 'reserved',
     }))
@@ -158,8 +227,11 @@ router.get('/:id/my-cards', async (req, res) => {
 
     if (!user) {
       console.log(`[my-cards] User not found for ID/Telegram: ${userId}`)
-      return res.json({ cards: [] })
+      return res.status(404).json({ error: 'User not found' })
     }
+
+    const participant = await db('room_participants').where({ room_id: roomId, user_id: user.id }).first()
+    if (!participant) return res.status(403).json({ error: 'Only room participants can view their cards.' })
 
     const selections = await db('room_card_selections').where({ room_id: roomId, user_id: user.id })
     console.log(`[my-cards] Found ${selections.length} cards for DB user ${user.id} in room ${roomId}`)

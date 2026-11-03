@@ -31,6 +31,7 @@ const GameScreen = () => {
   const [markedNumbers, setMarkedNumbers] = useState([]);
   const [cardsData, setCardsData] = useState([]);
   const [playersCount, setPlayersCount] = useState(0);
+  const [readyPlayers, setReadyPlayers] = useState(0);
   const [countdown, setCountdown] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [isSpectator, setIsSpectator] = useState(false);
@@ -65,9 +66,13 @@ const GameScreen = () => {
 
     socket.on('room_update', (data) => {
       if (Number.isFinite(Number(data.players))) setPlayersCount(Number(data.players));
+      if (Number.isFinite(Number(data.readyPlayers))) setReadyPlayers(Number(data.readyPlayers));
     });
     socket.on('game_in_progress', (data) => {
       setIsSpectator(true);
+      setCardsData([]);
+      setMarkedNumbers([]);
+      setGameStarted(false);
       setSpectatorNumbers(data.calledNumbers || []);
       setSpectatorBall(data.currentBall || null);
       if (Number.isFinite(Number(data.players))) setPlayersCount(Number(data.players));
@@ -88,7 +93,7 @@ const GameScreen = () => {
     });
     socket.on('countdown_tick', (data) => setCountdown(data.timeLeft));
     socket.on('my_cards', (data) => {
-      if (data.cards && data.cards.length > 0) setCardsData(data.cards);
+      if (!isSpectator && data.cards && data.cards.length > 0) setCardsData(data.cards);
     });
     socket.on('game_started', () => {
       setCountdown(null);
@@ -175,7 +180,7 @@ const GameScreen = () => {
   };
 
   const handleBingoClick = () => {
-    if (!gameStarted) return;
+    if (!gameStarted || isSpectator) return;
     const cardId = cardsData[0]?.id || cardsData[0]?.cardId;
     if (!cardId) return;
     socket.emit('claim_bingo', { roomId, userId: localStorage.getItem('dbUserId'), cardId, markedNumbers });
@@ -264,6 +269,17 @@ const GameScreen = () => {
            <div className="text-8xl font-black text-green-500 font-mono animate-pulse">{countdown}</div>
         </div>
       )}
+      {!gameStarted && countdown === null ? (
+        <div className="flex flex-col items-center justify-center flex-1">
+          <div className="bg-[#112A46] p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full border border-blue-800">
+            <h2 className="text-3xl font-bold mb-6">Waiting Room</h2>
+            <p className="text-xl mb-2">Players: <span className="font-bold text-yellow-400">{playersCount} / 10</span></p>
+            <p className="text-xl mb-6">Ready Players: <span className="font-bold text-green-400">{readyPlayers || 0}</span></p>
+            <p className="text-gray-400">Waiting for game to start...</p>
+          </div>
+        </div>
+      ) : (
+        <>
       <div className="flex flex-wrap items-center justify-between gap-1 mb-4 bg-[#112A46] p-2 rounded-md shadow-md">
         <div className="flex gap-2 text-xs font-bold">
           <div className="bg-[#2A4B6E] px-3 py-1 rounded">Win: 0</div>
@@ -348,6 +364,8 @@ const GameScreen = () => {
           </div>
         </div>
       </div>
+        </>
+      )}
 
       {bingoMessage && (
         <div className={`fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 px-6 py-4 rounded-xl shadow-2xl font-bold text-center z-50 ${bingoMessage.success ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>

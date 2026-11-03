@@ -15,6 +15,7 @@ export default function CardSelection() {
   const [loading, setLoading] = useState(true)
   const [selectedCards, setSelectedCards] = useState([])
   const [previewCard, setPreviewCard] = useState(null)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!roomId) {
@@ -24,11 +25,14 @@ export default function CardSelection() {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch(`${API_BASE}/api/rooms/${roomId}/cards`)
+        const userId = localStorage.getItem('dbUserId')
+        const res = await fetch(`${API_BASE}/api/rooms/${roomId}/cards?userId=${encodeURIComponent(userId || '')}`)
         const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to load cards')
         if (!cancelled) setCards(data || [])
       } catch (e) {
         console.error('Failed to load cards', e)
+        if (!cancelled) setError(e.message)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -50,13 +54,17 @@ export default function CardSelection() {
     if (selectedCards.length === 0) return
     const userId = localStorage.getItem('dbUserId') || 1
     try {
-      await fetch(`${API_BASE}/api/rooms/${roomId}/select-cards`, {
+      const res = await fetch(`${API_BASE}/api/rooms/${roomId}/select-cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: Number(userId), cardIds: selectedCards }),
       })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save selected cards')
     } catch (e) {
       console.error('Failed to save selected cards', e)
+      setError(e.message)
+      return
     }
     localStorage.setItem('selectedCards', JSON.stringify(selectedCards))
     localStorage.setItem('selectedCardIds', JSON.stringify(selectedCards))
@@ -74,6 +82,7 @@ export default function CardSelection() {
 
   return (
     <div className="min-h-screen bg-[#112A46] text-white px-4 py-4 pb-24">
+      {error && <p role="alert" className="mb-3 text-center text-red-300">{error}</p>}
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">{stake} Birr Per Card</h1>
         <div className="flex items-center gap-2">
@@ -145,7 +154,7 @@ export default function CardSelection() {
                 const updatedCards = [...selectedCards, previewCard]
                 try {
                   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-                  await fetch(`${API_URL}/api/rooms/${roomId}/select-cards`, {
+                  const res = await fetch(`${API_URL}/api/rooms/${roomId}/select-cards`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -153,9 +162,12 @@ export default function CardSelection() {
                       cardIds: updatedCards.map((c) => c.id)
                     })
                   })
+                  const data = await res.json()
+                  if (!res.ok) throw new Error(data.error || 'Failed to save selected cards')
                   navigate(`/game?roomId=${roomId}&stake=${stake}`)
                 } catch (err) {
                   console.error('Failed to save card:', err)
+                  setError(err.message)
                 }
               }}
               className="w-full mt-4 bg-green-600 text-white font-bold text-lg py-3 rounded-lg shadow-lg hover:bg-green-700"
