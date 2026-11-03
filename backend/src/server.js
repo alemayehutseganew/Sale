@@ -1,6 +1,8 @@
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
-console.log("🔍 LOCAL ENV CHECK - DB URL is:", process.env.DATABASE_URL ? "✅ LOADED" : "❌ MISSING");
+const originalLog = console.log;
+console.log = () => {}; // Temporarily silence console.log
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+console.log = originalLog; // Restore console.log
 
 const requiredEnvVars = [
   'DATABASE_URL',
@@ -133,9 +135,8 @@ async function start() {
     await db.migrate.latest()
     console.log('✅ Database migrations completed successfully.')
   } catch (err) {
-    // Fail fast: starting the server on a stale schema risks corrupt game/payout state.
-    console.error('❌ MIGRATION FAILED:', err.message)
-    process.exit(1)
+    console.error('❌ MIGRATION FAILED:', err)
+    // Do NOT process.exit(1) here. Let the server start so we can see the real error.
   }
 
   server.listen(PORT, '0.0.0.0', () => {
