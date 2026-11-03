@@ -13,8 +13,6 @@ export default function CardSelection() {
 
   const [cards, setCards] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedCards, setSelectedCards] = useState([])
-  const [previewCard, setPreviewCard] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -41,33 +39,21 @@ export default function CardSelection() {
     return () => { cancelled = true }
   }, [roomId, navigate])
 
-  const confirmCard = (card) => {
-    setSelectedCards((prev) => {
-      if (prev.includes(card.id)) return prev.filter((id) => id !== card.id)
-      if (prev.length >= 2) return prev
-      return [...prev, card.id]
-    })
-    setPreviewCard(null)
-  }
-
-  const handlePlayGame = async () => {
-    if (selectedCards.length === 0) return
-    const userId = localStorage.getItem('dbUserId') || 1
+  const handleCardSelect = async (cardId) => {
+    const userId = Number(localStorage.getItem('dbUserId'))
     try {
       const res = await fetch(`${API_BASE}/api/rooms/${roomId}/select-cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: Number(userId), cardIds: selectedCards }),
+        body: JSON.stringify({ userId, cardIds: [cardId] }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to save selected cards')
     } catch (e) {
-      console.error('Failed to save selected cards', e)
-      setError(e.message)
+      console.error('Failed to select card:', e)
+      setError(e.message || 'Network error. Please try again.')
       return
     }
-    localStorage.setItem('selectedCards', JSON.stringify(selectedCards))
-    localStorage.setItem('selectedCardIds', JSON.stringify(selectedCards))
     localStorage.setItem('stake', stake)
     navigate(`/game?stake=${stake}&roomId=${roomId}`)
   }
@@ -98,86 +84,16 @@ export default function CardSelection() {
       </div>
 
       <div className="grid grid-cols-8 gap-2 mb-4">
-        {cards.map((card) => {
-          const isSelected = selectedCards.includes(card.id)
-          return (
-            <button
-              key={card.id}
-              onClick={() => setPreviewCard(card)}
-              className={`bingo-3d-box aspect-square flex items-center justify-center text-sm font-bold transition-colors ${
-                isSelected ? 'bg-green-500 text-white' : 'text-[#112A46]'
-              }`}
-            >
-              {card.card_number}
-            </button>
-          )
-        })}
+        {cards.map((card) => (
+          <button
+            key={card.id}
+            onClick={() => handleCardSelect(card.id)}
+            className="bingo-3d-box aspect-square flex items-center justify-center text-sm font-bold transition-colors text-[#112A46]"
+          >
+            {card.card_number}
+          </button>
+        ))}
       </div>
-
-      {previewCard && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-4 w-11/12 max-w-sm mx-auto shadow-2xl relative">
-            <button onClick={() => setPreviewCard(null)} className="absolute top-3 right-3 text-gray-500 font-bold text-xl">
-              ✕
-            </button>
-
-            <h3 className="text-xl font-bold text-[#112A46] mb-4 text-center">
-              Card {previewCard.id}
-            </h3>
-
-            <div className="grid grid-cols-5 gap-1 mb-2">
-              <div className="bg-green-700 text-white font-bold py-1 rounded text-center">B</div>
-              <div className="bg-yellow-500 text-white font-bold py-1 rounded text-center">I</div>
-              <div className="bg-red-600 text-white font-bold py-1 rounded text-center">N</div>
-              <div className="bg-green-500 text-white font-bold py-1 rounded text-center">G</div>
-              <div className="bg-red-600 text-white font-bold py-1 rounded text-center">O</div>
-            </div>
-
-            <div className="grid grid-cols-5 gap-1 mb-6">
-              {previewCard.matrix.flat().map((num, index) => {
-                const isFree = index === 12 || num === 'FREE'
-                return (
-                  <div
-                    key={index}
-                    className={`aspect-square flex items-center justify-center font-bold text-sm rounded shadow-sm ${
-                      isFree ? 'bg-blue-600 text-white' : 'bg-white text-black border-b-2 border-gray-300'
-                    }`}
-                  >
-                    {isFree ? 'F' : num}
-                  </div>
-                )
-              })}
-            </div>
-
-            <button
-              onClick={async () => {
-                const updatedCards = [...selectedCards, previewCard]
-                try {
-                  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-                  const res = await fetch(`${API_URL}/api/rooms/${roomId}/select-cards`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      userId: localStorage.getItem('dbUserId'),
-                      cardIds: updatedCards.map((c) => c.id)
-                    })
-                  })
-                  const data = await res.json()
-                  if (!res.ok) throw new Error(data.error || 'Failed to save selected cards')
-                  navigate(`/game?roomId=${roomId}&stake=${stake}`)
-                } catch (err) {
-                  console.error('Failed to save card:', err)
-                  setError(err.message)
-                }
-              }}
-              className="w-full mt-4 bg-green-600 text-white font-bold text-lg py-3 rounded-lg shadow-lg hover:bg-green-700"
-            >
-              Confirm & Play
-            </button>
-          </div>
-        </div>
-      )}
-
     </div>
   )
 }
