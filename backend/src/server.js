@@ -1,6 +1,25 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-console.log("🔍 ENV CHECK - DB URL is:", process.env.DATABASE_URL ? "✅ LOADED" : "❌ MISSING");
+
+const requiredEnvVars = [
+  'DATABASE_URL',
+  'TELEGRAM_BOT_TOKEN',
+  'JWT_SECRET',
+  'TELEBIRR_RECEIVER_NUMBER',
+  'TELEBIRR_RECEIVER_NAME',
+  'FRONTEND_URL'
+];
+
+const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+
+if (missingVars.length > 0) {
+  console.error('❌ CRITICAL ERROR: Missing environment variables:', missingVars.join(', '));
+  if (process.env.NODE_ENV === 'production') {
+    console.error('If running on Enzonic, ensure these are added in the Enzonic Dashboard.');
+  }
+} else {
+  console.log('✅ All required environment variables are loaded successfully.');
+}
 
 const express = require('express')
 const cors = require('cors')
