@@ -78,20 +78,18 @@ if (process.env.REDIS_URL) {
 const PORT = process.env.PORT || 3001
 
 async function start() {
+  console.log('⏳ Running database migrations...')
   try {
-    console.log('Running database migrations...')
     await db.migrate.latest()
-    console.log('Database migrations completed successfully.')
-
-    server.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`)
-      launchBot()
-    })
+    console.log('✅ Database migrations completed.')
   } catch (err) {
-    console.error('Database migration error:', err)
-    await db.destroy()
-    process.exitCode = 1
+    console.error('❌ Migration failed:', err.message)
   }
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`)
+    launchBot()
+  })
 }
 
 start()
