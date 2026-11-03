@@ -86,7 +86,7 @@ router.get('/stats', adminAuth, async (req, res) => {
 
     const wageredResult = await db('financial_ledger')
       .where({ type: 'ENTRY_FEE' })
-      .sum({ total: db.raw('ABS(amount)') })
+      .select(db.raw('SUM(ABS(amount)) as total'))
       .first()
     const totalWagered = parseFloat(wageredResult.total || 0).toFixed(2)
 
