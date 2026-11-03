@@ -8,6 +8,7 @@ const { Server } = require('socket.io')
 const authRoutes = require('./src/routes/auth')
 const roomsRoutes = require('./src/routes/rooms')
 const paymentsRoutes = require('./src/routes/payments')
+const adminRoutes = require('./src/routes/admin')
 const authMiddleware = require('./middleware/auth')
 const { initGameHandler } = require('./src/sockets/gameHandler')
 
@@ -18,6 +19,8 @@ app.use(express.json())
 app.use('/api/auth', authRoutes)
 app.use('/api/rooms', roomsRoutes)
 app.use('/api/payments', paymentsRoutes)
+app.use('/api/admin', adminRoutes)
+console.log('✅ Admin routes mounted at /api/admin')
 
 // Example protected route to verify middleware
 app.get('/api/me', authMiddleware, (req, res) => {
@@ -41,6 +44,5 @@ if (require.main === module) {
 }
 
 module.exports = { app, server, io, start }
-
 
 
