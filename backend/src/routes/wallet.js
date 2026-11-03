@@ -7,7 +7,10 @@ const ps = require('../services/paymentService')
 router.get('/balance', async (req, res) => {
   try {
     const { userId } = req.query
-    const user = await db('users').where({ id: userId }).orWhere({ telegram_id: userId }).first()
+    let user = await db('users').where({ id: userId }).first()
+    if (!user) {
+      user = await db('users').where({ telegram_id: userId }).first()
+    }
     if (!user) return res.status(404).json({ error: 'User not found' })
     res.json({ balance: user.wallet_balance || 0 })
   } catch (err) {

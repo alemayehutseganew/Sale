@@ -134,30 +134,45 @@ router.get('/users', adminAuth, async (req, res) => {
 router.post('/users/:id/adjust-balance', adminAuth, async (req, res) => {
   try {
     const { amount, type } = req.body
-    const user = await db('users').where({ id: req.params.id }).first()
-    if (!user) return res.status(404).json({ error: 'User not found' })
     const amt = Number(amount)
-    if (type === 'add') {
-      await db('users').where({ id: user.id }).increment('wallet_balance', amt)
-    } else if (type === 'subtract') {
-      await db('users').where({ id: user.id }).decrement('wallet_balance', amt)
-    } else {
+    if (!Number.isFinite(amt) || amt <= 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' })
+    }
+    if (type !== 'add' && type !== 'subtract') {
       return res.status(400).json({ error: 'Invalid type' })
     }
-    const hasLedger = await db.schema.hasTable('financial_ledger')
-    if (hasLedger) {
-      await db('financial_ledger').insert({
-        user_id: user.id,
-        type: `admin_${type}`,
-        amount: amt,
-        reference: `ADMIN-${Date.now()}`,
-        created_at: new Date(),
-      })
-    }
-    const updated = await db('users').where({ id: user.id }).first()
+
+    const updated = await db.transaction(async (trx) => {
+      const user = await trx('users').where({ id: req.params.id }).first()
+      if (!user) {
+        const err = new Error('User not found')
+        err.statusCode = 404
+        throw err
+      }
+
+      const userQuery = trx('users').where({ id: user.id })
+      if (type === 'add') {
+        await userQuery.increment('wallet_balance', amt)
+      } else {
+        await userQuery.decrement('wallet_balance', amt)
+      }
+
+      const hasLedger = await trx.schema.hasTable('financial_ledger')
+      if (hasLedger) {
+        await trx('financial_ledger').insert({
+          user_id: user.id,
+          type: `admin_${type}`,
+          amount: amt,
+          reference: `ADMIN-${Date.now()}`,
+          created_at: new Date(),
+        })
+      }
+
+      return trx('users').where({ id: user.id }).first()
+    })
     res.json({ success: true, user: updated })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    res.status(err.statusCode || 500).json({ error: err.message })
   }
 })
 
