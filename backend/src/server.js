@@ -1,5 +1,10 @@
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+if (process.env.NODE_ENV !== 'production') {
+  const path = require('path');
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+  console.log("🔍 LOCAL ENV CHECK - DB URL is:", process.env.DATABASE_URL ? "✅ LOADED" : "❌ MISSING");
+} else {
+  console.log("🚀 PRODUCTION MODE: Using system injected environment variables.");
+}
 
 const requiredEnvVars = [
   'DATABASE_URL',
