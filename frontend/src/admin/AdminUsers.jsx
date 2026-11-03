@@ -36,6 +36,7 @@ export default function AdminUsers() {
             <th className="p-2 text-left">ID</th>
             <th className="p-2 text-left">Telegram ID</th>
             <th className="p-2 text-left">Name</th>
+            <th className="p-2 text-left">Phone Number</th>
             <th className="p-2 text-left">Balance</th>
             <th className="p-2 text-left">Actions</th>
           </tr>
@@ -45,7 +46,14 @@ export default function AdminUsers() {
             <tr key={u.id} className="border-b border-gray-700 hover:bg-gray-800">
               <td className="p-2">{u.id}</td>
               <td className="p-2">{u.telegram_id}</td>
-              <td className="p-2">{u.first_name}</td>
+              <td className="p-2">{u.first_name || 'Unknown'}</td>
+              <td className="p-2">
+                {u.phone_number ? (
+                  <span className="font-mono text-green-400">{u.phone_number}</span>
+                ) : (
+                  <span className="text-xs italic text-gray-500">Not Registered</span>
+                )}
+              </td>
               <td className="p-2">{u.wallet_balance}</td>
               <td className="p-2">
                 <button

@@ -118,7 +118,7 @@ router.get('/users', adminAuth, async (req, res) => {
     const limit = Math.min(Math.max(requestedLimit, 1), 100)
     const offset = (page - 1) * limit
     const users = await db('users')
-      .select('id', 'telegram_id', 'first_name', 'username', 'wallet_balance', 'created_at')
+      .select('id', 'telegram_id', 'first_name', 'username', 'phone_number', 'wallet_balance', 'created_at')
       .orderBy('wallet_balance', 'desc')
       .orderBy('id', 'desc')
       .limit(limit)
