@@ -3,36 +3,61 @@ const router = express.Router()
 const db = require('../db')
 const jwt = require('jsonwebtoken')
 const crypto = require('crypto')
+const bcrypt = require('bcryptjs')
 const { adminAuth, JWT_SECRET } = require('../middleware/adminAuth')
 const archiveData = require('../../scripts/archive_old_data');
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex')
-  const derived = crypto.scryptSync(password, salt, 64).toString('hex')
-  return `${salt}:${derived}`
-}
 
 function verifyPassword(password, stored) {
+  if (/^\$2[aby]\$/.test(stored)) {
+    return bcrypt.compareSync(password, stored)
+  }
+
   const [salt, derived] = stored.split(':')
   const check = crypto.scryptSync(password, salt, 64).toString('hex')
   return crypto.timingSafeEqual(Buffer.from(check, 'hex'), Buffer.from(derived, 'hex'))
 }
 
-// seed default admin if none
-async function seedAdmin() {
-  try {
-    const existing = await db('admins').where({ username: 'alex' }).first()
-    if (!existing) {
-      await db('admins').insert({ username: 'alex', password_hash: hashPassword('Alex@8989') })
-      console.log('✅ Admin seeded (alex)')
-    } else {
-      await db('admins').where({ username: 'alex' }).update({ password_hash: hashPassword('Alex@8989') })
-      console.log('✅ Admin password updated (alex)')
-    }
-  } catch (e) {
-    console.error('Admin seed error:', e.message)
+router.post('/seed', async (req, res) => {
+  const configuredToken = process.env.ADMIN_SEED_TOKEN
+  const providedToken = req.get('x-admin-seed-token') || ''
+  if (!configuredToken || Buffer.byteLength(configuredToken, 'utf8') < 32) {
+    return res.status(503).json({ error: 'Admin seeding is not configured.' })
   }
-}
-seedAdmin()
+
+  const expected = Buffer.from(configuredToken, 'utf8')
+  const provided = Buffer.from(providedToken, 'utf8')
+  if (expected.length !== provided.length || !crypto.timingSafeEqual(expected, provided)) {
+    return res.status(401).json({ error: 'Unauthorized.' })
+  }
+
+  const username = typeof req.body?.username === 'string' ? req.body.username.trim() : ''
+  const password = typeof req.body?.password === 'string' ? req.body.password : ''
+  const passwordLength = Buffer.byteLength(password, 'utf8')
+  if (username !== 'kedir') {
+    return res.status(400).json({ error: 'This endpoint only provisions the kedir admin account.' })
+  }
+  if (passwordLength < 16 || passwordLength > 72) {
+    return res.status(400).json({ error: 'Password must be 16-72 bytes.' })
+  }
+
+  try {
+    const passwordHash = bcrypt.hashSync(password, 10)
+    const inserted = await db('admins')
+      .insert({ username, password_hash: passwordHash })
+      .onConflict('username')
+      .ignore()
+      .returning('id')
+
+    if (!inserted.length) {
+      return res.status(409).json({ error: 'Admin username already exists.' })
+    }
+
+    return res.status(201).json({ message: `Admin '${username}' created successfully.` })
+  } catch (err) {
+    console.error('Admin seed error:', err.message)
+    return res.status(500).json({ error: 'Failed to create admin.' })
+  }
+})
 
 router.post('/login', async (req, res) => {
   try {
