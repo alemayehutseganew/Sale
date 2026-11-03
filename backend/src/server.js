@@ -1,8 +1,5 @@
-const path = require('path');
-const originalLog = console.log;
-console.log = () => {}; // Temporarily silence console.log
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-console.log = originalLog; // Restore console.log
+const path = require('path')
+require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true })
 
 const requiredEnvVars = [
   'DATABASE_URL',

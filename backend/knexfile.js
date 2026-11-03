@@ -1,5 +1,6 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env'), quiet: true });
+const normalizeDatabaseUrl = require('./src/dbUrl')
 
 function buildConfig() {
   const base = {
@@ -11,13 +12,15 @@ function buildConfig() {
       idleTimeoutMillis: 30000,
     },
   }
-  if (process.env.DATABASE_URL) {
+  const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL)
+  if (databaseUrl) {
+    process.env.DATABASE_URL = databaseUrl
     return {
       ...base,
       client: 'pg',
       connection: {
-        connectionString: process.env.DATABASE_URL,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        connectionString: databaseUrl,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false,
       },
     }
   }
@@ -40,4 +43,3 @@ module.exports = {
   development: config,
   production: config,
 }
-
