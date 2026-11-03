@@ -264,27 +264,11 @@ const GameScreen = () => {
 
   return (
     <div className="min-h-screen bg-[#1e3a5f] text-white p-2 font-sans flex flex-col">
-      {countdown !== null && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
-           <div className="text-8xl font-black text-green-500 font-mono animate-pulse">{countdown}</div>
-        </div>
-      )}
-      {!gameStarted && countdown === null ? (
-        <div className="flex flex-col items-center justify-center flex-1">
-          <div className="bg-[#112A46] p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full border border-blue-800">
-            <h2 className="text-3xl font-bold mb-6">Waiting Room</h2>
-            <p className="text-xl mb-2">Players: <span className="font-bold text-yellow-400">{playersCount} / 10</span></p>
-            <p className="text-xl mb-6">Ready Players: <span className="font-bold text-green-400">{readyPlayers || 0}</span></p>
-            <p className="text-gray-400">Waiting for game to start...</p>
-          </div>
-        </div>
-      ) : (
-        <>
-      <div className="flex flex-wrap items-center justify-between gap-1 mb-4 bg-[#112A46] p-2 rounded-md shadow-md">
+      <div className="relative z-[60] flex flex-wrap items-center justify-between gap-1 mb-4 bg-[#112A46] p-2 rounded-md shadow-md">
         <div className="flex gap-2 text-xs font-bold">
-          <div className="bg-[#2A4B6E] px-3 py-1 rounded">Win: 0</div>
-          <div className="bg-[#2A4B6E] px-3 py-1 rounded">Stake: {stake}</div>
-          <div className="bg-[#2A4B6E] px-3 py-1 rounded">Call: {calledNumbers.length}</div>
+          <div className="bg-[#2A4B6E] px-3 py-1 rounded">Win: {gameStarted ? '0' : '--'}</div>
+          <div className="bg-[#2A4B6E] px-3 py-1 rounded">Stake: {stake || '--'}</div>
+          <div className="bg-[#2A4B6E] px-3 py-1 rounded">Call: {gameStarted ? calledNumbers.length : '--'}</div>
           <div className="bg-[#2A4B6E] px-3 py-1 rounded">Players: {playersCount}</div>
         </div>
         <div className="flex gap-1 text-xs">
@@ -296,7 +280,15 @@ const GameScreen = () => {
           </button>
         </div>
       </div>
-
+      {countdown !== null && (
+        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
+           <div className="text-8xl font-black text-green-500 font-mono animate-pulse">{countdown}</div>
+        </div>
+      )}
+      {!gameStarted && countdown === null ? (
+        <div className="flex-1 flex justify-center items-center text-gray-400">Waiting for players...</div>
+      ) : (
+        <>
       <div className="flex flex-row gap-2 flex-1">
         <div className="w-1/2 flex flex-col gap-4">
           <div className="w-full h-40 flex items-center justify-center mb-4">
