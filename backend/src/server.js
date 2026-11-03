@@ -1,6 +1,6 @@
 if (process.env.NODE_ENV !== 'production') {
   const path = require('path');
-  require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+  require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
   console.log("🔍 LOCAL ENV CHECK - DB URL is:", process.env.DATABASE_URL ? "✅ LOADED" : "❌ MISSING");
 } else {
   console.log("🚀 PRODUCTION MODE: Using system injected environment variables.");
@@ -174,6 +174,14 @@ function shutdown(signal) {
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.on('SIGINT', () => shutdown('SIGINT'))
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ UNCAUGHT EXCEPTION:', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ UNHANDLED REJECTION at:', promise, 'reason:', reason);
+});
 
 start()
 
