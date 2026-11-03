@@ -50,6 +50,7 @@ app.use('/api/payments', paymentsRoutes)
 app.use('/api/wallet', walletRoutes)
 app.use('/api/users', usersRoutes)
 app.use('/api/admin', adminRoutes)
+console.log('✅ Admin routes mounted at /api/admin')
 
 const server = http.createServer(app)
 const io = setupSocket(server)
