@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+import { API_BASE } from '../services/api';
 
 export default function AdminGames() {
   const [games, setGames] = useState([]);
