@@ -18,7 +18,8 @@ const corsOptions = {
   origin: [
     'http://localhost:5173',
     'https://guatimala.vercel.app',
-    'https://guatimala-git-main-alemayehutseganews-projects.vercel.app'
+    'https://guatimala-git-main-alemayehutseganews-projects.vercel.app',
+    'https://frontend-five-sigma-72.vercel.app'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
