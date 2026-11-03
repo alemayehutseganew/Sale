@@ -34,15 +34,21 @@ export default function Lobby() {
   const [helpOpen, setHelpOpen] = useState(false)
 
   useEffect(() => {
-    const userId = localStorage.getItem('dbUserId')
-    if (userId) {
-      fetch(`${API_BASE}/api/wallet/balance?userId=${userId}`)
+    const fetchBalance = () => {
+      const userId = localStorage.getItem('dbUserId')
+      if (!userId) return
+
+      fetch(`${API_BASE}/api/wallet/balance?userId=${userId}&t=${Date.now()}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
           if (data) setWalletBalance(Number(data.balance ?? 0))
         })
-        .catch(() => {})
+        .catch((err) => console.error('Failed to fetch balance:', err))
     }
+
+    fetchBalance()
+    window.addEventListener('focus', fetchBalance)
+    return () => window.removeEventListener('focus', fetchBalance)
   }, [])
 
   const toggleLanguage = () => {
