@@ -326,7 +326,9 @@ const GameScreen = () => {
       )}
       {!gameStarted && countdown === null ? (
         <div className="flex-1 flex justify-center items-center text-gray-400">
-          ትጫዋቾችን በመተበቅ ላይ ..
+          ለመጀመር ትጫዋቾችን በመጠበቅ ላይ ..
+          <br />
+          Waiting for players to start ..
         </div>
       ) : (
         <>
