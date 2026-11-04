@@ -223,45 +223,20 @@ router.get('/games', adminAuth, async (req, res) => {
 
 router.get('/payments', adminAuth, async (req, res) => {
   try {
-    const ledgerTransactions = await db('financial_ledger')
-      .join('users', 'financial_ledger.user_id', 'users.id')
-      .select(
-        'financial_ledger.id',
-        'users.first_name',
-        'users.username',
-        'users.telegram_id',
-        'financial_ledger.amount',
-        db.raw("CASE financial_ledger.type WHEN 'game_win' THEN 'WINNING_PAYOUT' WHEN 'admin_add' THEN 'ADMIN_ADJUSTMENT' WHEN 'admin_subtract' THEN 'ADMIN_ADJUSTMENT' ELSE UPPER(financial_ledger.type) END as type"),
-        'financial_ledger.reference as reference_id',
-        'financial_ledger.created_at'
-      )
-      .orderBy('financial_ledger.created_at', 'desc')
-      .limit(200)
-
-    const pendingPayments = await db('payments')
+    const transactions = await db('payments')
       .join('users', 'payments.user_id', 'users.id')
-      .where({ 'payments.status': 'pending' })
       .select(
-        'payments.id as payment_id',
+        'payments.id',
         'users.first_name',
         'users.username',
         'users.telegram_id',
         'payments.amount',
         'payments.type',
+        'payments.status',
         'payments.transaction_reference as reference_id',
         'payments.created_at'
       )
       .orderBy('payments.created_at', 'desc')
-
-    const transactions = [
-      ...pendingPayments.map((payment) => ({
-        ...payment,
-        id: `pending-${payment.payment_id}`,
-        type: payment.type === 'deposit' ? 'DEPOSIT' : 'WITHDRAWAL',
-        status: 'pending',
-      })),
-      ...ledgerTransactions.map((transaction) => ({ ...transaction, status: 'completed' })),
-    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 200)
 
     res.json({ transactions })
   } catch (err) {
@@ -345,7 +320,7 @@ router.post('/payments/:id/reject', adminAuth, async (req, res) => {
   try {
     let paymentType
     let targetUserId
-    let refundAmount = 0
+    let newBalance
     await db.transaction(async (trx) => {
       const p = await trx('payments').where({ id: req.params.id }).forUpdate().first()
       if (!p) {
@@ -359,38 +334,40 @@ router.post('/payments/:id/reject', adminAuth, async (req, res) => {
         throw err
       }
 
+      if (p.type === 'withdrawal') {
+        const user = await trx('users').where({ id: p.user_id }).forUpdate().first()
+        if (!user) {
+          const err = new Error('User not found')
+          err.statusCode = 404
+          throw err
+        }
+
+        await trx('users').where({ id: p.user_id }).increment('wallet_balance', p.amount)
+        newBalance = Number(user.wallet_balance || 0) + Number(p.amount)
+
+        const hasLedger = await trx.schema.hasTable('financial_ledger')
+        if (hasLedger) {
+          await trx('financial_ledger').insert({
+            user_id: p.user_id,
+            amount: p.amount,
+            type: 'REFUND',
+            reference: `REFUND-PAYMENT-${p.id}`,
+            created_at: new Date(),
+          })
+        }
+      }
+
       await trx('payments').where({ id: p.id }).update({ status: 'rejected' })
       paymentType = p.type
       targetUserId = p.user_id
-
-      // Refund wallet balance for rejected withdrawals
-      if (p.type === 'withdrawal') {
-        const user = await trx('users').where({ id: p.user_id }).first()
-        if (user) {
-          await trx('users').where({ id: p.user_id }).increment('wallet_balance', p.amount)
-          refundAmount = p.amount
-        }
-      }
     })
 
-    // Insert REFUND ledger entry for rejected withdrawals
-    if (paymentType === 'withdrawal' && refundAmount > 0) {
-      const hasLedger = await db.schema.hasTable('financial_ledger')
-      if (hasLedger) {
-        await db('financial_ledger').insert({
-          user_id: targetUserId,
-          amount: refundAmount,
-          type: 'REFUND',
-          reference: `REFUND-PAYMENT-${req.params.id}`,
-          created_at: new Date(),
-        })
+    if (paymentType === 'withdrawal') {
+      try {
+        req.app.get('io')?.to(`user_${targetUserId}`).emit('wallet_updated', { newBalance })
+      } catch (emitErr) {
+        console.error('Failed to emit wallet_updated:', emitErr)
       }
-    }
-
-    try {
-      req.app.get('io')?.to(`user_${targetUserId}`).emit('wallet_updated', { newBalance: null })
-    } catch (emitErr) {
-      console.error('Failed to emit wallet_updated:', emitErr)
     }
 
     res.json({ success: true, message: `${paymentType} rejected` })

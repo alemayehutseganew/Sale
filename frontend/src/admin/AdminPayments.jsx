@@ -5,156 +5,212 @@ export default function AdminPayments() {
   const [transactions, setTransactions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    let active = true;
     const fetchPayments = async () => {
       try {
         const token = localStorage.getItem('adminToken');
         const res = await fetchApi('/admin/payments', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
-        if (data.transactions) {
-          setTransactions(data.transactions.map((transaction) => ({
-            ...transaction,
-            status: transaction.status || 'completed'
-          })));
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to load payments');
+        }
+        if (active) {
+          setTransactions(data.transactions || []);
+          setError('');
         }
       } catch (err) {
-        console.error(err);
+        console.error('Failed to load payments:', err);
+        if (active) setError(err.message || 'Failed to load payments');
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
     fetchPayments();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const getTypeStyles = (type) => {
-    switch (type) {
-      case 'DEPOSIT': return { badge: 'bg-green-900/50 text-green-300', text: 'text-green-400', sign: '+' };
-      case 'WINNING_PAYOUT': return { badge: 'bg-yellow-900/50 text-yellow-300', text: 'text-yellow-400', sign: '+' };
-      case 'ENTRY_FEE': return { badge: 'bg-red-900/50 text-red-300', text: 'text-red-400', sign: '-' };
-      case 'WITHDRAWAL': return { badge: 'bg-red-900/50 text-red-300', text: 'text-red-400', sign: '-' };
-      default: return { badge: 'bg-slate-700 text-slate-300', text: 'text-slate-300', sign: '' };
+  const handlePaymentAction = async (tx, action) => {
+    setProcessingId(tx.id);
+    setError('');
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetchApi(`/admin/payments/${tx.id}/${action}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to ${action} payment`);
+      }
+      setTransactions((current) => current.map((payment) => (
+        payment.id === tx.id
+          ? { ...payment, status: action === 'approve' ? 'completed' : 'rejected' }
+          : payment
+      )));
+    } catch (err) {
+      console.error(`Failed to ${action} payment:`, err);
+      setError(err.message || `Failed to ${action} payment`);
+    } finally {
+      setProcessingId(null);
     }
   };
 
-  const filteredTransactions = transactions.filter(tx => {
-    const search = searchTerm.toLowerCase();
-    const userName = (tx.first_name || tx.username || 'Unknown').toLowerCase();
-    return userName.includes(search) || tx.type.toLowerCase().includes(search) || (tx.reference_id && tx.reference_id.toLowerCase().includes(search));
+  const filteredTransactions = transactions.filter((tx) => {
+    const search = searchTerm.trim().toLowerCase();
+    const searchableFields = [
+      tx.first_name,
+      tx.username,
+      tx.telegram_id,
+      tx.type,
+      tx.status,
+      tx.reference_id,
+    ];
+    return searchableFields.some((value) => String(value || '').toLowerCase().includes(search));
   });
 
-  if (loading) return <div className="text-white p-6">Loading payments...</div>;
+  const getTypeStyles = (type) => {
+    switch (String(type).toLowerCase()) {
+      case 'deposit':
+        return 'bg-green-900/50 text-green-300';
+      case 'withdrawal':
+        return 'bg-orange-900/50 text-orange-300';
+      default:
+        return 'bg-slate-700 text-slate-300';
+    }
+  };
+
+  const getStatusStyles = (status) => {
+    switch (String(status).toLowerCase()) {
+      case 'pending':
+        return 'bg-yellow-900/50 text-yellow-300';
+      case 'completed':
+        return 'bg-green-900/50 text-green-300';
+      case 'rejected':
+        return 'bg-red-900/50 text-red-300';
+      default:
+        return 'bg-slate-700 text-slate-300';
+    }
+  };
+
+  if (loading) {
+    return <div className="p-6 text-white">Loading payments...</div>;
+  }
 
   return (
-    <div className="p-4 lg:p-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-white">Financial Ledger</h1>
+    <div className="w-full min-w-0 p-4 lg:p-8">
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">Payments &amp; Withdrawals</h1>
+          <p className="mt-1 text-sm text-slate-400">Review deposits and withdrawal requests.</p>
+        </div>
         <input
-          type="text"
-          placeholder="Search user, type, or ref..."
+          type="search"
+          aria-label="Search payments"
+          placeholder="Search user, type, status, or reference..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="bg-slate-800 text-white px-4 py-2 rounded-xl border border-slate-700 focus:outline-none focus:border-indigo-500 w-full md:w-80"
+          onChange={(event) => setSearchTerm(event.target.value)}
+          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none sm:max-w-sm"
         />
-      </div>
+      </header>
 
-      {/* DESKTOP TABLE VIEW */}
-      <div className="hidden md:block bg-slate-800 rounded-2xl shadow-xl border border-slate-700 overflow-hidden">
+      {error && (
+        <div role="alert" className="mb-4 rounded-lg border border-red-800 bg-red-950/60 p-3 text-sm text-red-200">
+          {error}
+        </div>
+      )}
+
+      <div className="w-full overflow-x-auto rounded-2xl border border-gray-700 bg-slate-800 shadow-xl">
         <table className="w-full text-left text-sm text-slate-300">
-          <thead className="bg-slate-900/50 text-xs uppercase font-bold text-slate-400">
+          <thead className="bg-slate-900/70 text-xs uppercase text-slate-400">
             <tr>
-              <th className="px-6 py-4">User</th>
-              <th className="px-6 py-4">Type</th>
-              <th className="px-6 py-4">Amount</th>
-              <th className="px-6 py-4">Reference</th>
-              <th className="px-6 py-4">Date</th>
-              <th className="px-6 py-4">Action</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">User</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Type</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Amount</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Reference</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Status</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Date</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700/50">
+          <tbody>
             {filteredTransactions.map((tx) => {
-              const styles = getTypeStyles(tx.type);
+              const status = String(tx.status || '').toLowerCase();
+              const type = String(tx.type || '').toLowerCase();
+              const isProcessing = processingId === tx.id;
+
               return (
-                <tr key={tx.id} className="hover:bg-slate-700/30 transition-colors">
-                  <td className="px-6 py-4">
+                <tr key={tx.id} className="border-b border-gray-700 hover:bg-gray-800 transition-colors">
+                  <td className="max-w-48 break-words px-3 py-4 sm:px-5">
                     <div className="font-semibold text-white">{tx.first_name || 'No Name'}</div>
-                    <div className="text-xs text-slate-500">@{tx.username || tx.telegram_id}</div>
+                    <div className="text-xs text-slate-500">
+                      {tx.username ? `@${tx.username}` : tx.telegram_id || '—'}
+                    </div>
                   </td>
-                  <td className="px-6 py-4"><span className={`px-3 py-1 rounded-full text-xs font-bold ${styles.badge}`}>{tx.type}</span></td>
-                  <td className={`px-6 py-4 font-mono font-bold text-lg ${styles.text}`}>{styles.sign}{Math.abs(tx.amount).toFixed(2)}</td>
-                  <td className="px-6 py-4 font-mono text-sm text-slate-400">{tx.reference_id ? `...${tx.reference_id.slice(-8)}` : '-'}</td>
-                  <td className="px-6 py-4 text-sm text-slate-400">{new Date(tx.created_at).toLocaleString()}</td>
-                  <td className="px-6 py-4">
-                    {tx.status === 'pending' ? (
-                      <div className="flex gap-2">
+                  <td className="px-3 py-4 sm:px-5">
+                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${getTypeStyles(type)}`}>
+                      {type || 'unknown'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-4 font-mono font-semibold text-white sm:px-5">
+                    {Number(tx.amount || 0).toFixed(2)} ETB
+                  </td>
+                  <td className="max-w-40 break-all px-3 py-4 font-mono text-xs text-slate-400 sm:px-5">
+                    {tx.reference_id || '—'}
+                  </td>
+                  <td className="px-3 py-4 sm:px-5">
+                    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${getStatusStyles(status)}`}>
+                      {status || 'unknown'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-4 text-slate-400 sm:px-5">
+                    {new Date(tx.created_at).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-4 sm:px-5">
+                    {status === 'pending' ? (
+                      <div className="flex flex-wrap gap-2">
                         <button
-                          onClick={async () => {
-                            const token = localStorage.getItem('adminToken');
-                            await fetchApi(`/admin/payments/${tx.payment_id}/approve`, {
-                              method: 'POST',
-                              headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            window.location.reload();
-                          }}
-                          className="bg-green-600 text-white px-3 py-1 rounded text-xs font-bold"
+                          type="button"
+                          disabled={isProcessing}
+                          onClick={() => handlePaymentAction(tx, 'approve')}
+                          className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Approve
                         </button>
                         <button
-                          onClick={async () => {
-                            const token = localStorage.getItem('adminToken');
-                            await fetchApi(`/admin/payments/${tx.payment_id}/reject`, {
-                              method: 'POST',
-                              headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            window.location.reload();
-                          }}
-                          className="bg-red-600 text-white px-3 py-1 rounded text-xs font-bold"
+                          type="button"
+                          disabled={isProcessing}
+                          onClick={() => handlePaymentAction(tx, 'reject')}
+                          className="rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Reject
                         </button>
                       </div>
                     ) : (
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${tx.status === 'completed' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
-                        {tx.status.toUpperCase()}
+                      <span className="text-xs font-semibold uppercase text-slate-400">
+                        {status || 'Unknown'}
                       </span>
                     )}
                   </td>
                 </tr>
               );
             })}
+            {filteredTransactions.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
+                  {transactions.length === 0 ? 'No payments found.' : 'No payments match your search.'}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-      </div>
-
-      {/* MOBILE CARD VIEW */}
-      <div className="md:hidden space-y-4">
-        {filteredTransactions.map((tx) => {
-          const styles = getTypeStyles(tx.type);
-          return (
-            <div key={tx.id} className="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg">
-              <div className="flex justify-between items-center mb-2">
-                <div>
-                  <div className="font-semibold text-white">{tx.first_name || 'No Name'}</div>
-                  <div className="text-xs text-slate-500">@{tx.username || tx.telegram_id}</div>
-                </div>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${styles.badge}`}>{tx.type}</span>
-              </div>
-              <div className="flex justify-between items-end mt-4">
-                <div>
-                  <p className="text-slate-500 text-xs uppercase">Reference</p>
-                  <p className="font-mono text-xs text-slate-400">{tx.reference_id ? `...${tx.reference_id.slice(-6)}` : '-'}</p>
-                </div>
-                <div className="text-right">
-                  <p className={`font-mono font-bold text-xl ${styles.text}`}>{styles.sign}{Math.abs(tx.amount).toFixed(2)} ETB</p>
-                  <p className="text-slate-500 text-xs mt-1">{new Date(tx.created_at).toLocaleDateString()}</p>
-                </div>
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
