@@ -13,33 +13,6 @@ bot.catch((err, ctx) => {
   console.error(`[BOT] Error for ${ctx.updateType}:`, err.message)
 })
 
-// Register menu and commands (safely)
-try {
-  bot.telegram.setChatMenuButton({
-    menu_button: { type: 'commands' }
-  }).then(() => console.log('✅ Menu button forced to COMMANDS mode')).catch((e) => {
-    console.warn('⚠️ Failed to set bot commands, but server is continuing.')
-    console.error('Bot setup error:', e)
-  })
-
-  bot.telegram.setMyCommands([
-    { command: 'register', description: 'Register your phone number' },
-    { command: 'start', description: 'Restart' },
-    { command: 'menu', description: 'Menu' },
-    { command: 'play', description: 'Play' },
-    { command: 'balance', description: 'Balance' },
-    { command: 'deposit', description: 'Deposit' },
-    { command: 'withdraw', description: 'Withdraw' },
-    { command: 'help', description: 'How to play the game' }
-    
-  ]).then(() => console.log('✅ Commands registered')).catch((e) => {
-    console.warn('⚠️ Failed to set bot commands, but server is continuing.')
-    console.error('Bot setup error:', e)
-  })
-} catch (e) {
-  console.error('Bot setup error:', e)
-}
-
 // Get user's language
 async function getUserLanguage(telegramId) {
   try {
@@ -304,21 +277,23 @@ bot.on('contact', async (ctx) => {
   }
 })
 
-// Launch the bot
+// Initialize the bot for webhook updates; polling is not used in serverless deployments.
 function launch() {
   if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.log('TELEGRAM_BOT_TOKEN not set, skipping bot launch')
+    console.log('TELEGRAM_BOT_TOKEN not set, skipping bot initialization')
     return
   }
-  bot.launch().then(() => console.log('✅ Telegram bot launched')).catch((e) => {
-    if (e?.response?.error_code === 409 || String(e?.message || e).includes('409')) {
-      console.warn('⚠️ 409 Conflict: Another bot instance is running. The bot will not respond to messages on this instance.')
-    } else {
-      console.error('Bot launch error:', e)
-    }
-  })
-  process.once('SIGINT', () => bot.stop('SIGINT'))
-  process.once('SIGTERM', () => bot.stop('SIGTERM'))
+  console.log('✅ Telegram bot initialized for webhook updates')
 }
 
-module.exports = { bot, launch, getMainMenu }
+const handleUpdate = async (req, res) => {
+  try {
+    await bot.handleUpdate(req.body)
+    res.status(200).send('OK')
+  } catch (err) {
+    console.error('Error handling update:', err)
+    res.status(500).send('Error')
+  }
+}
+
+module.exports = { bot, launch, getMainMenu, handleUpdate }

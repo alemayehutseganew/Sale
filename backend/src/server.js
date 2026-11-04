@@ -32,7 +32,7 @@ const usersRoutes = require('./routes/users')
 const adminRoutes = require('./routes/admin')
 const db = require('./db')
 const { setupSocket } = require('./sockets/gameHandler')
-const { launch: launchBot } = require('./bot')
+const { launch: launchBot, handleUpdate } = require('./bot')
 
 const app = express()
 
@@ -71,6 +71,8 @@ app.use(express.json({ limit: '1mb' }))
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
+
+app.post('/api/bot/webhook', handleUpdate)
 
 // --- API routes ---
 app.use('/api/auth', authRoutes)
@@ -141,7 +143,7 @@ async function start() {
     console.log(`🚀 Server running on port ${PORT}`)
     try {
       launchBot()
-      console.log('🤖 Telegram bot launched')
+      console.log('🤖 Telegram webhook handler is ready')
     } catch (err) {
       console.error('❌ Bot launch failed:', err.message)
     }
