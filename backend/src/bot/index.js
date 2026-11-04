@@ -53,7 +53,7 @@ function getMainMenu(lang = 'en') {
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: t.play, web_app: { url: 'https://guatimala.vercel.app' } }],
+        [{ text: t.play, web_app: { url: process.env.FRONTEND_URL || 'https://frontend-five-sigma-72.vercel.app' } }],
         [{ text: t.balance, callback_data: 'menu_balance' }, { text: t.deposit, callback_data: 'menu_deposit' }],
         [{ text: t.withdraw, callback_data: 'menu_withdraw' }, { text: t.room, callback_data: 'menu_room' }],
         [{ text: t.help, callback_data: 'menu_help' }]
@@ -95,7 +95,7 @@ bot.command('menu', async (ctx) => {
 // /play command
 bot.command('play', (ctx) => {
   ctx.reply('Tap the button below to launch the game:', {
-    reply_markup: { inline_keyboard: [[{ text: '🎰 Play Bingo', web_app: { url: 'https://guatimala.vercel.app' } }]] }
+    reply_markup: { inline_keyboard: [[{ text: '🎰 Play Bingo', web_app: { url: process.env.FRONTEND_URL || 'https://frontend-five-sigma-72.vercel.app' } }]] }
   }).catch(() => {})
 })
 
@@ -165,7 +165,7 @@ bot.action('menu_withdraw', async (ctx) => {
 bot.action('menu_room', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   ctx.reply('To join a room, please open the Mini App and select a stake.', {
-    reply_markup: { inline_keyboard: [[{ text: 'Open Lobby', web_app: { url: 'https://guatimala.vercel.app' } }]] }
+    reply_markup: { inline_keyboard: [[{ text: 'Open Lobby', web_app: { url: process.env.FRONTEND_URL || 'https://frontend-five-sigma-72.vercel.app' } }]] }
   }).catch(() => {})
 })
 
@@ -237,13 +237,21 @@ bot.on('text', async (ctx) => {
         return ctx.reply(`❌ Insufficient balance. You only have ETB ${Number(user.wallet_balance).toFixed(2)}.`).catch(() => {})
       }
 
-      await db('payments').insert({
-        user_id: user.id,
-        amount: amount,
-        provider: 'telebirr',
-        status: 'pending',
-        type: 'withdrawal',
-        transaction_reference: `WD-${Date.now()}-${user.id}`
+      await db.transaction(async (trx) => {
+        // 1. Deduct balance immediately
+        await trx('users')
+          .where({ id: user.id })
+          .decrement('wallet_balance', amount);
+
+        // 2. Insert the pending withdrawal
+        await trx('payments').insert({
+          user_id: user.id,
+          amount: amount,
+          provider: 'telebirr',
+          status: 'pending',
+          type: 'withdrawal',
+          transaction_reference: `WD-${Date.now()}-${user.id}`
+        });
       })
 
       ctx.reply(`⏳ Your withdrawal request for ETB ${amount.toFixed(2)} is pending admin approval.`).catch(() => {})
