@@ -60,7 +60,7 @@ export default function CardSelection() {
     return (
       <div className="min-h-screen bg-[#112A46] text-white flex items-center justify-center">
         Loading available cards...
-
+      </div>
     )
   }
 
@@ -78,8 +78,12 @@ export default function CardSelection() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
+        </div>
+      </div>
 
-
+      <p className="text-center text-sm text-gray-400 mb-6">
+        Select your card (1–400). Grayed-out cards are already taken.
+      </p>
 
       <div className="grid grid-cols-20 gap-1 max-w-4xl mx-auto mb-8">
         {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
@@ -90,21 +94,21 @@ export default function CardSelection() {
               key={cardNumber}
               onClick={() => handleCardSelect(cardNumber)}
               disabled={isTaken}
-              className={`aspect-square flex items-center justify-center text-xs font-bold rounded transition-colors ${
-                isTaken
-                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                  : isSelected
-                    ? 'bg-yellow-400 text-[#112A46] shadow-lg'
-                    : 'bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:text-yellow-400'
-              }`}
+              className={isTaken
+                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : isSelected
+                  ? 'bg-yellow-400 text-[#112A46] shadow-lg'
+                  : 'bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:text-yellow-400'}
             >
               {cardNumber}
             </button>
           )
-        })}
+        })
+      </div>
 
-
-
-
-   )</div>
+      <div className="text-center text-xs text-gray-500">
+        Cards 1–400. Card #N always shows the same numbers.
+      </div>
+    </div>
+  )
 }
