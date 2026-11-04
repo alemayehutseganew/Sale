@@ -3,6 +3,7 @@ const db = require('../db')
 const { parseTelebirrSMS, verifyTelebirrReceipt } = require('../services/paymentService')
 
 const API_BASE = process.env.API_URL || 'http://localhost:3001'
+const FRONTEND_URL = 'https://ked-seven.vercel.app'
 const userStates = {}
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN)
@@ -53,7 +54,7 @@ function getMainMenu(lang = 'en') {
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: t.play, web_app: { url: process.env.FRONTEND_URL || 'https://ked-seven.vercel.app' } }],
+        [{ text: t.play, web_app: { url: FRONTEND_URL } }],
         [{ text: t.balance, callback_data: 'menu_balance' }, { text: t.deposit, callback_data: 'menu_deposit' }],
         [{ text: t.withdraw, callback_data: 'menu_withdraw' }, { text: t.room, callback_data: 'menu_room' }],
         [{ text: t.help, callback_data: 'menu_help' }]
@@ -95,7 +96,7 @@ bot.command('menu', async (ctx) => {
 // /play command
 bot.command('play', (ctx) => {
   ctx.reply('Tap the button below to launch the game:', {
-    reply_markup: { inline_keyboard: [[{ text: '🎰 Play Bingo', web_app: { url: process.env.FRONTEND_URL || 'https://ked-seven.vercel.app' } }]] }
+    reply_markup: { inline_keyboard: [[{ text: '🎰 Play Bingo', web_app: { url: FRONTEND_URL } }]] }
   }).catch(() => {})
 })
 
@@ -165,7 +166,7 @@ bot.action('menu_withdraw', async (ctx) => {
 bot.action('menu_room', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   ctx.reply('To join a room, please open the Mini App and select a stake.', {
-    reply_markup: { inline_keyboard: [[{ text: 'Open Lobby', web_app: { url: process.env.FRONTEND_URL || 'https://ked-seven.vercel.app' } }]] }
+    reply_markup: { inline_keyboard: [[{ text: 'Open Lobby', web_app: { url: FRONTEND_URL } }]] }
   }).catch(() => {})
 })
 
