@@ -32,7 +32,7 @@ const usersRoutes = require('./routes/users')
 const adminRoutes = require('./routes/admin')
 const db = require('./db')
 const { setupSocket } = require('./sockets/gameHandler')
-const { launch: launchBot, handleUpdate } = require('./bot')
+const { handleUpdate } = require('./bot')
 
 const app = express()
 
@@ -141,12 +141,7 @@ async function start() {
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`)
-    try {
-      launchBot()
-      console.log('🤖 Telegram webhook handler is ready')
-    } catch (err) {
-      console.error('❌ Bot launch failed:', err.message)
-    }
+    console.log('🤖 Telegram webhook handler is ready')
   })
 }
 

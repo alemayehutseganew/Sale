@@ -277,15 +277,6 @@ bot.on('contact', async (ctx) => {
   }
 })
 
-// Initialize the bot for webhook updates; polling is not used in serverless deployments.
-function launch() {
-  if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.log('TELEGRAM_BOT_TOKEN not set, skipping bot initialization')
-    return
-  }
-  console.log('✅ Telegram bot initialized for webhook updates')
-}
-
 const handleUpdate = async (req, res) => {
   try {
     await bot.handleUpdate(req.body)
@@ -296,4 +287,4 @@ const handleUpdate = async (req, res) => {
   }
 }
 
-module.exports = { bot, launch, getMainMenu, handleUpdate }
+module.exports = { bot, getMainMenu, handleUpdate }
