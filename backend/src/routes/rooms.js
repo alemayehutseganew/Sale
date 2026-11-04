@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../db')
-const { generateSingleCard } = require('../utils/cardGenerator')
+const { generateSingleCard, generateCardFromNumber } = require('../utils/cardGenerator')
 const MAX_ROOM_PLAYERS = 10
 
 // GET /api/rooms (list waiting rooms)
@@ -14,13 +14,35 @@ router.get('/', async (req, res) => {
   }
 })
 
+// GET /api/rooms/active-cards?stake=X — returns taken card_ids for waiting rooms of this stake
+router.get('/active-cards', async (req, res) => {
+  try {
+    const stake = Number(req.query.stake)
+    if (!stake) {
+      return res.status(400).json({ error: 'stake is required' })
+    }
+    const rooms = await db('game_rooms').where({ stake_amount: stake, status: 'WAITING' })
+    const roomIds = rooms.map((r) => r.id)
+    if (roomIds.length === 0) {
+      return res.json({ takenCards: [] })
+    }
+    const taken = await db('room_card_selections')
+      .whereIn('room_id', roomIds)
+      .select('card_id')
+    res.json({ takenCards: taken.map((t) => t.card_id) })
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch active cards' })
+  }
+})
+
 router.post('/join', async (req, res) => {
   try {
     // 1. DEFINE VARIABLES
     const stake = Number(req.body.stake || req.body.level);
     const userId = req.tgUser?.id || req.body.userId;
-    
-    console.log('[join] Request received for stake:', stake, 'userId:', userId);
+    const cardNumber = Number(req.body.card_number);
+
+    console.log('[join] Request received for stake:', stake, 'userId:', userId, 'cardNumber:', cardNumber);
 
     // 2. FIND USER
     let user = null
@@ -84,22 +106,33 @@ router.post('/join', async (req, res) => {
         console.log(`[JOIN] User ${user.id} was already in room. Join skipped.`)
       }
 
-      // 6. ENSURE USER HAS A CARD (auto-assign to remove confirm step)
+      // 6. ENSURE USER HAS A CARD (use user-selected card_number)
+      if (!cardNumber || cardNumber < 1 || cardNumber > 400) {
+        throw new Error('INVALID_CARD_NUMBER');
+      }
+
+      // Check if this card is already taken in the room
+      const existingCard = await trx('room_card_selections')
+        .where({ room_id: room.id, card_id: cardNumber })
+        .first();
+      if (existingCard) {
+        throw new Error('CARD_ALREADY_TAKEN');
+      }
+
       let cardSelection = await trx('room_card_selections')
         .where({ room_id: room.id, user_id: user.id })
-        .first()
+        .first();
       if (!cardSelection) {
-        const cardId = Math.floor(Math.random() * 400) + 1
-        const matrix = generateSingleCard()
+        const matrix = generateCardFromNumber(cardNumber);
         const [inserted] = await trx('room_card_selections').insert({
           room_id: room.id,
-          card_id: cardId,
+          card_id: cardNumber,
           user_id: user.id,
           card: JSON.stringify(matrix),
           status: 'reserved',
-        }).returning('*')
-        cardSelection = inserted
-        console.log(`[JOIN] Auto-assigned card ${cardId} to user ${user.id}.`)
+        }).returning('*');
+        cardSelection = inserted;
+        console.log(`[JOIN] Assigned card ${cardNumber} to user ${user.id}.`);
       }
 
       console.log('[join] Transaction successful')
@@ -117,6 +150,12 @@ router.post('/join', async (req, res) => {
 
   } catch (err) {
     console.error('[join] CATCH ERROR:', err.message)
+    if (err.message === 'INVALID_CARD_NUMBER') {
+      return res.status(400).json({ error: 'Invalid card number. Choose a card between 1 and 400.' })
+    }
+    if (err.message === 'CARD_ALREADY_TAKEN') {
+      return res.status(400).json({ error: 'Card already taken' })
+    }
     res.status(500).json({ error: 'JOIN_FAILED', message: err.message })
   }
 })

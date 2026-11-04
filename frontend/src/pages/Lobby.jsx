@@ -47,36 +47,9 @@ export default function Lobby() {
   }, [refreshBalance])
 
   const handleJoin = async (stake) => {
-    try {
-      const userId = localStorage.getItem('dbUserId')
-      const res = await fetchApi('/rooms/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stake, userId }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        console.log('Backend error response:', data)
-        const errorCode = data.error || data.message || ''
-
-        if (errorCode.includes('INSUFFICIENT_BALANCE') || errorCode.includes('Insufficient')) {
-          alert('💰 Insufficient Balance\n\nYou need at least ' + stake + ' ETB to join this game.\n\nPlease deposit funds via the Telegram bot first.')
-        } else {
-          alert('Error: ' + (data.message || data.error || 'Something went wrong. Please try again.'))
-        }
-        return
-      }
-
-      if (data.roomId) {
-        sessionStorage.setItem('activeRoomId', data.activeRoomId || '')
-        navigate(`/game?roomId=${data.roomId}&stake=${stake}`)
-      }
-    } catch (e) {
-      console.error('Join room failed', e)
-      alert('Network error. Please check your connection and try again.')
-    }
+    // Navigate to card selection instead of calling join directly
+    const sanitizedStake = stake && stake > 0 ? stake : 10
+    navigate(`/select-card?stake=${sanitizedStake}`)
   }
 
   const handleLogout = () => {

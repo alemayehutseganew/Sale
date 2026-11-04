@@ -7,60 +7,59 @@ export default function CardSelection() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const { i18n } = useTranslation()
-  const roomId = searchParams.get('roomId')
   const stake = searchParams.get('stake') || '10'
 
-  const [cards, setCards] = useState([])
+  const [takenCards, setTakenCards] = useState(new Set())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedCard, setSelectedCard] = useState(null)
 
   useEffect(() => {
-    if (!roomId) {
-      navigate('/')
-      return
-    }
     let cancelled = false
     async function load() {
       try {
-        const userId = localStorage.getItem('dbUserId')
-        const res = await fetchApi(`/rooms/${roomId}/cards?userId=${encodeURIComponent(userId || '')}`)
+        const res = await fetchApi(`/rooms/active-cards?stake=${encodeURIComponent(stake)}`)
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to load cards')
-        if (!cancelled) setCards(data || [])
+        if (!res.ok) throw new Error(data.error || 'Failed to load taken cards')
+        if (!cancelled) {
+          setTakenCards(new Set(data.takenCards || []))
+          setLoading(false)
+        }
       } catch (e) {
-        console.error('Failed to load cards', e)
-        if (!cancelled) setError(e.message)
-      } finally {
-        if (!cancelled) setLoading(false)
+        console.error('Failed to load taken cards', e)
+        if (!cancelled) setError(e.message || 'Network error. Please try again.')
+        setLoading(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [roomId, navigate])
+  }, [stake])
 
-  const handleCardSelect = async (cardId) => {
-    const userId = Number(localStorage.getItem('dbUserId'))
+  const handleCardSelect = async (cardNumber) => {
+    if (takenCards.has(cardNumber)) return
+    setSelectedCard(cardNumber)
+    const userId = localStorage.getItem('dbUserId')
     try {
-      const res = await fetchApi(`/rooms/${roomId}/select-cards`, {
+      const res = await fetchApi('/rooms/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, cardIds: [cardId] }),
+        body: JSON.stringify({ stake, userId, card_number: cardNumber }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to save selected cards')
+      if (!res.ok) throw new Error(data.error || 'Failed to join room')
+      localStorage.setItem('stake', stake)
+      navigate(`/game?roomId=${data.roomId}&stake=${data.stake}`)
     } catch (e) {
-      console.error('Failed to select card:', e)
+      console.error('Failed to join room:', e)
       setError(e.message || 'Network error. Please try again.')
-      return
+      setSelectedCard(null)
     }
-    localStorage.setItem('stake', stake)
-    navigate(`/game?stake=${stake}&roomId=${roomId}`)
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#112A46] text-white flex items-center justify-center">
-        Loading cards...
+        Loading available cards...
       </div>
     )
   }
@@ -82,17 +81,30 @@ export default function CardSelection() {
         </div>
       </div>
 
-      <div className="grid grid-cols-8 gap-2 mb-4">
-        {cards.map((card) => (
-          <button
-            key={card.id}
-            onClick={() => handleCardSelect(card.id)}
-            className="bingo-3d-box aspect-square flex items-center justify-center text-sm font-bold transition-colors text-[#112A46]"
-          >
-            {card.card_number}
-          </button>
-        ))}
+      <div className="grid grid-cols-20 gap-1 max-w-4xl mx-auto mb-8">
+        {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
+          const isTaken = takenCards.has(cardNumber)
+          const isSelected = selectedCard === cardNumber
+          return (
+            <button
+              key={cardNumber}
+              onClick={() => handleCardSelect(cardNumber)}
+              disabled={isTaken}
+              className={`aspect-square flex items-center justify-center text-xs font-bold rounded transition-colors ${
+                isTaken
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  : isSelected
+                    ? 'bg-yellow-400 text-[#112A46] shadow-lg'
+                    : 'bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:text-yellow-400'
+              }`}
+            >
+              {cardNumber}
+            </button>
+          )
+        })}
+      </div>
+
       </div>
     </div>
-  )
+   )</div>
 }
