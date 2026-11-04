@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SocketService from '../services/socket';
 import { fetchApi } from '../services/api';
-import { playBallCall } from '../utils/bingoSounds';
+import { getMuteState, playBallCall, toggleMute } from '../utils/bingoSounds';
 
 const getBallColor = (letter) => {
   switch(letter) {
@@ -40,7 +40,7 @@ const GameScreen = () => {
   const [spectatorBall, setSpectatorBall] = useState(null);
   const [bingoMessage, setBingoMessage] = useState(null);
   const [gameResult, setGameResult] = useState(null);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isMuted, setIsMuted] = useState(getMuteState());
 
   useEffect(() => {
     if (!userId) return;
@@ -96,9 +96,10 @@ const GameScreen = () => {
       setCountdown(null);
       setGameStarted(true);
     });
-    socket.on('new_number_called', ({ number, letter }) => {
-      if (soundEnabled) playBallCall(`${letter}-${number}`);
+    socket.on('new_number_called', (data) => {
+      playBallCall(data.ball || `${data.letter}-${data.number}`);
 
+      const { number, letter } = data;
       if (isSpectator) {
         setSpectatorBall({ number, letter });
         setSpectatorNumbers(prev => [...prev, number]);
@@ -143,6 +144,13 @@ const GameScreen = () => {
       setSpectatorBall(null);
       navigate(`/select-card?stake=${data.stake || stake}`);
     });
+    socket.on('room_reset', (data) => {
+      if (!isSpectator) return
+      setGameResult(null);
+      setSpectatorNumbers([]);
+      setSpectatorBall(null);
+      navigate(`/select-card?stake=${data.stake || stake}`);
+    });
     socket.on('bingo_result', (data) => {
       setBingoMessage(data);
       setTimeout(() => setBingoMessage(null), 4000);
@@ -165,9 +173,10 @@ const GameScreen = () => {
       socket.off('game_over');
       socket.off('game_ended_for_spectators');
       socket.off('next_game_ready');
+      socket.off('room_reset');
       socket.off('bingo_result');
     };
-  }, [socket, roomId, userId, stake, soundEnabled, isSpectator, navigate]);
+  }, [socket, roomId, userId, stake, isSpectator, navigate]);
 
   const handleDaub = (num) => {
     if (!calledNumbers.map(Number).includes(Number(num))) return;
@@ -207,15 +216,21 @@ const GameScreen = () => {
               <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'am' : 'en')} className="rounded bg-[#2A4B6E] px-3 py-1 hover:bg-[#3A5B7E]">
                 {i18n.language === 'en' ? 'AM' : 'EN'}
               </button>
-              <button onClick={() => setSoundEnabled(!soundEnabled)} className={`rounded px-3 py-1 ${soundEnabled ? 'bg-green-600' : 'bg-[#2A4B6E]'}`}>
-                {soundEnabled ? 'SND' : 'MUTE'}
+              <button
+                type="button"
+                aria-label={isMuted ? 'Unmute sound' : 'Mute sound'}
+                onClick={() => setIsMuted(toggleMute())}
+                className="ml-2 rounded-full bg-gray-800 p-2 text-white hover:bg-gray-700"
+              >
+                {isMuted ? '\u{1F507}' : '\u{1F50A}'}
               </button>
             </div>
           </div>
 
-          <div className="mb-4 rounded-xl border border-blue-500 bg-blue-900/80 p-4 text-center shadow-lg">
+          <div className="mb-4 rounded-xl border border-blue-500 bg-blue-900/90 p-4 text-center shadow-lg">
             <p className="mb-1 text-lg font-bold">እባክዎ በትእግስት ይጠብቁ!</p>
             <p className="text-sm text-blue-200">ጨዋታው እየተካሄደ ነው። የሚቀጥለው ዙር ሲጀምር መጫወት ይችላሉ።</p>
+            <p className="mt-2 text-xs text-gray-400">(Please wait! The game is in progress. You can play in the next round.)</p>
           </div>
 
           <div className="rounded-xl border border-blue-900 bg-[#112A46] p-4 shadow-2xl sm:p-6">
@@ -292,8 +307,13 @@ const GameScreen = () => {
           <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'am' : 'en')} className="bg-[#2A4B6E] px-3 py-1 rounded hover:bg-[#3A5B7E]">
             {i18n.language === 'en' ? 'AM' : 'EN'}
           </button>
-          <button onClick={() => { if (soundEnabled) window.speechSynthesis?.cancel(); setSoundEnabled(!soundEnabled); }} className={`px-3 py-1 rounded ${soundEnabled ? 'bg-green-600' : 'bg-[#2A4B6E]'}`}>
-            {soundEnabled ? 'SND' : 'MUTE'}
+          <button
+            type="button"
+            aria-label={isMuted ? 'Unmute sound' : 'Mute sound'}
+            onClick={() => setIsMuted(toggleMute())}
+            className="ml-2 rounded-full bg-gray-800 p-2 text-white hover:bg-gray-700"
+          >
+            {isMuted ? '\u{1F507}' : '\u{1F50A}'}
           </button>
         </div>
       </div>
@@ -303,7 +323,9 @@ const GameScreen = () => {
         </div>
       )}
       {!gameStarted && countdown === null ? (
-        <div className="flex-1 flex justify-center items-center text-gray-400">Waiting for players...</div>
+        <div className="flex-1 flex justify-center items-center text-gray-400">
+          Waiting for players to start ({playersCount}/2)...
+        </div>
       ) : (
         <>
       <div className="flex flex-row gap-2 flex-1">

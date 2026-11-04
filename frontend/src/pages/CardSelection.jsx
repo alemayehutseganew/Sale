@@ -28,9 +28,9 @@ export default function CardSelection() {
   }, [stake]);
 
   const handleCardSelect = async (cardNumber) => {
+    unlockAudio();
     if (takenCards.includes(cardNumber)) return;
 
-    unlockAudio();
     setLoading(true);
     setError('');
 

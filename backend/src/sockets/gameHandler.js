@@ -7,60 +7,44 @@ const { bot } = require('../bot/index')
 const rooms = {}
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
 const roomStatusRank = { WAITING: 0, COUNTDOWN: 1, PLAYING: 2, CLAIMING: 3, ENDED: 4 }
-const MAX_ROOM_PLAYERS = 10
-
-async function ensureWaitingRoom(stake) {
-  return db.transaction(async (trx) => {
-    await trx.raw('SELECT pg_advisory_xact_lock(hashtext(?))', [`game_rooms:${stake}`])
-
-    const waitingRooms = await trx('game_rooms')
-      .where({ stake_amount: stake, status: 'WAITING' })
-      .orderBy('created_at')
-      .forUpdate()
-
-    for (const waitingRoom of waitingRooms) {
-      const participantCount = await trx('room_participants')
-        .where({ room_id: waitingRoom.id })
-        .count('* as count')
-        .first()
-      if (Number(participantCount.count) < MAX_ROOM_PLAYERS) return waitingRoom
-    }
-
-    const [room] = await trx('game_rooms').insert({
-      stake_amount: stake,
-      status: 'WAITING',
-      called_numbers: JSON.stringify([])
-    }).returning('*')
-    return room
-  })
-}
 
 function scheduleRoomReset(io, roomId, room) {
   room.resetTimeoutId = setTimeout(async () => {
     if (rooms[roomId] !== room || room.status !== 'ENDED') return
 
-    if (room.intervalId) clearInterval(room.intervalId)
-    room.intervalId = null
-    room.players = {}
-    room.calledNumbers.clear()
-    room.claimedBy = []
-    room.latestNumber = null
-
     try {
-      const nextRoom = await ensureWaitingRoom(room.stake)
-      io.to(roomId).emit('next_game_ready', {
-        roomId: nextRoom.id,
-        stake: nextRoom.stake_amount
+      await db.transaction(async (trx) => {
+        await trx('room_card_selections').where({ room_id: roomId }).del()
+        await trx('room_participants').where({ room_id: roomId }).del()
+        await trx('game_rooms').where({ id: roomId }).update({
+          status: 'WAITING',
+          called_numbers: JSON.stringify([]),
+        })
+      })
+
+      if (room.intervalId) clearInterval(room.intervalId)
+      room.intervalId = null
+      room.status = 'WAITING'
+      room.players = {}
+      room.calledNumbers.clear()
+      room.claimedBy = []
+      room.latestNumber = null
+
+      io.to(roomId).emit('room_reset', {
+        roomId,
+        stake: room.stake,
       })
     } catch (err) {
       console.error(`[Game] Failed to prepare next room after ${roomId}:`, err)
+      return
+    }
+
+    try {
+      await io.in(roomId).socketsLeave(roomId)
+    } catch (err) {
+      console.error(`[Game] Failed to remove sockets from reset room ${roomId}:`, err)
     } finally {
-      try {
-        await io.in(roomId).socketsLeave(roomId)
-      } catch (err) {
-        console.error(`[Game] Failed to remove sockets from ended room ${roomId}:`, err)
-      }
-      if (rooms[roomId] === room) delete rooms[roomId]
+      if (room.status === 'WAITING' && rooms[roomId] === room) delete rooms[roomId]
     }
   }, 5000)
 }
@@ -379,13 +363,13 @@ function initGameHandler(io) {
         io.to(roomId).emit('room_update', { players: playerCount, stake: rooms[roomId].stake })
 
         // 3. AUTO-START
-        if (rooms[roomId].status === 'WAITING' && playerCount >= 2) {
+        if (rooms[roomId].status === 'WAITING' && playerCount === 2) {
           setTimeout(() => {
             const activeRoom = rooms[roomId]
             const activePlayerCount = activeRoom
               ? new Set(Object.values(activeRoom.players).map((player) => String(player.userId))).size
               : 0
-            if (activeRoom && activeRoom.status === 'WAITING' && activePlayerCount >= 2) {
+            if (activeRoom && activeRoom.status === 'WAITING' && activePlayerCount === 2) {
               startCountdown(io, roomId)
             }
           }, 2000)
