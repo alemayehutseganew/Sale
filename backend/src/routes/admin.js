@@ -272,6 +272,8 @@ router.get('/payments', adminAuth, async (req, res) => {
 router.post('/payments/:id/approve', adminAuth, async (req, res) => {
   try {
     let paymentType
+    let newBalance
+    let targetUserId
     await db.transaction(async (trx) => {
       const p = await trx('payments').where({ id: req.params.id }).forUpdate().first()
       if (!p) {
@@ -317,7 +319,17 @@ router.post('/payments/:id/approve', adminAuth, async (req, res) => {
         })
       }
       paymentType = p.type
+      targetUserId = p.user_id
+      newBalance =
+        Number(user.wallet_balance || 0) +
+        (p.type === 'deposit' ? Number(p.amount) : -Number(p.amount))
     })
+
+    try {
+      req.app.get('io')?.to(`user_${targetUserId}`).emit('wallet_updated', { newBalance })
+    } catch (emitErr) {
+      console.error('Failed to emit wallet_updated:', emitErr)
+    }
 
     res.json({ success: true, message: `${paymentType} approved` })
   } catch (err) {

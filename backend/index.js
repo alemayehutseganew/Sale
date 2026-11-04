@@ -29,6 +29,7 @@ app.get('/api/me', authMiddleware, (req, res) => {
 
 const server = http.createServer(app)
 const io = new Server(server, { cors: { origin: '*' } })
+app.set('io', io)
 initGameHandler(io)
 
 const PORT = process.env.PORT || 3000
