@@ -15,6 +15,12 @@ const getBallColor = (letter) => {
   }
 };
 
+const formatTime = (seconds) => {
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const remainingSeconds = (seconds % 60).toString().padStart(2, '0');
+  return `${minutes}:${remainingSeconds}`;
+};
+
 const GameScreen = () => {
   const socket = SocketService.get() || SocketService.connect()
   const [searchParams] = useSearchParams();
@@ -320,8 +326,18 @@ const GameScreen = () => {
         </div>
       </div>
       {countdown !== null && (
-        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-50">
-           <div className="text-8xl font-black text-green-500 font-mono animate-pulse">{countdown}</div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-md animate-pulse rounded-3xl border border-white/15 bg-gradient-to-br from-indigo-900 to-blue-900 px-6 py-10 text-center shadow-2xl sm:px-12">
+            <p className="mb-4 text-lg font-semibold text-blue-100 sm:text-xl">
+              ጨዋታው የሚጀምረው በ:
+            </p>
+            <div className="font-mono text-6xl font-black text-white drop-shadow-lg sm:text-7xl">
+              {formatTime(countdown)}
+            </div>
+            <p className="mt-4 text-base font-medium text-indigo-100 sm:text-lg">
+              ይዘጋጁ! መልካም እድል!
+            </p>
+          </div>
         </div>
       )}
       {!gameStarted && countdown === null ? (
@@ -336,7 +352,7 @@ const GameScreen = () => {
         <div className="w-1/2 flex flex-col gap-4">
           <div className="w-full h-40 flex items-center justify-center mb-4">
             {countdown !== null ? (
-              <span className="text-7xl font-bold text-white">{countdown}</span>
+              <span className="text-7xl font-bold text-white">{formatTime(countdown)}</span>
             ) : currentBall ? (
               <div className={`w-40 h-40 rounded-full border-8 flex items-center justify-center shadow-2xl ${getBallColor(currentBall.letter)}`}>
                 <span className="text-5xl font-black text-white">{currentBall.letter}-{currentBall.number}</span>
