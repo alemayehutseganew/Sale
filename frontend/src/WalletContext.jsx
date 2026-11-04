@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { API_BASE } from './services/api'
+import { API_BASE_URL, fetchApi } from './services/api'
 import SocketService from './services/socket'
 
 const WalletContext = createContext(null)
@@ -19,10 +19,7 @@ export function WalletProvider({ children }) {
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE}/api/wallet/balance?userId=${encodeURIComponent(userId)}&t=${Date.now()}`,
-        { cache: 'no-store' },
-      )
+      const response = await fetchApi(`/wallet/balance?userId=${encodeURIComponent(userId)}&t=${Date.now()}`, { cache: 'no-store' })
       if (!response.ok) {
         throw new Error(`Wallet balance request failed: ${response.status}`)
       }

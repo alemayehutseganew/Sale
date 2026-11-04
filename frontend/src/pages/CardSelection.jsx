@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { fetchApi } from '../services/api'
 
 export default function CardSelection() {
   const [searchParams] = useSearchParams()
@@ -24,7 +23,7 @@ export default function CardSelection() {
     async function load() {
       try {
         const userId = localStorage.getItem('dbUserId')
-        const res = await fetch(`${API_BASE}/api/rooms/${roomId}/cards?userId=${encodeURIComponent(userId || '')}`)
+        const res = await fetchApi(`/rooms/${roomId}/cards?userId=${encodeURIComponent(userId || '')}`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Failed to load cards')
         if (!cancelled) setCards(data || [])
@@ -42,7 +41,7 @@ export default function CardSelection() {
   const handleCardSelect = async (cardId) => {
     const userId = Number(localStorage.getItem('dbUserId'))
     try {
-      const res = await fetch(`${API_BASE}/api/rooms/${roomId}/select-cards`, {
+      const res = await fetchApi(`/rooms/${roomId}/select-cards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, cardIds: [cardId] }),

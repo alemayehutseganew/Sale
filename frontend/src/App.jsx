@@ -10,6 +10,7 @@ import Leaderboard from './pages/Leaderboard'
 import { LanguageProvider } from './LanguageContext'
 import { WalletProvider } from './WalletContext'
 import SocketService from './services/socket'
+import { fetchApi } from './services/api'
 import AdminLogin from './admin/AdminLogin'
 import AdminLayout from './admin/AdminLayout'
 import AdminDashboard from './admin/AdminDashboard'
@@ -17,8 +18,6 @@ import AdminUsers from './admin/AdminUsers'
 import AdminGames from './admin/AdminGames'
 import AdminPayments from './admin/AdminPayments'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-console.log("🚀 API URL:", import.meta.env.VITE_API_URL)
 
 export default function App() {
   useEffect(() => {
@@ -29,7 +28,7 @@ export default function App() {
     const initData = tg?.initData || ''
     if (!initData) return
 
-    fetch(`${API_BASE}/api/auth/login`, {
+    fetchApi('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ initData }),

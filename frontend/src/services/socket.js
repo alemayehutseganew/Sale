@@ -1,12 +1,12 @@
 import { io } from 'socket.io-client'
-import { API_BASE } from './api'
+import { SOCKET_BASE_URL } from './api'
 
 let socket = null
 
 const SocketService = {
   connect: (token = localStorage.getItem('token')) => {
     if (!socket) {
-      socket = io(API_BASE, { transports: ['websocket'], auth: { token } })
+      socket = io(SOCKET_BASE_URL, { transports: ['websocket'], auth: { token } })
     } else if (socket.auth?.token !== token) {
       socket.auth = { token }
       socket.disconnect()

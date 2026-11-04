@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { API_BASE } from '../services/api';
+import { fetchApi } from '../services/api';
 
 export default function AdminPayments() {
   const [transactions, setTransactions] = useState([]);
@@ -10,7 +10,7 @@ export default function AdminPayments() {
     const fetchPayments = async () => {
       try {
         const token = localStorage.getItem('adminToken');
-        const res = await fetch(`${API_BASE}/api/admin/payments`, {
+        const res = await fetchApi('/admin/payments', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -92,7 +92,7 @@ export default function AdminPayments() {
                         <button
                           onClick={async () => {
                             const token = localStorage.getItem('adminToken');
-                            await fetch(`${API_BASE}/api/admin/payments/${tx.payment_id}/approve`, {
+                            await fetchApi(`/admin/payments/${tx.payment_id}/approve`, {
                               method: 'POST',
                               headers: { 'Authorization': `Bearer ${token}` }
                             });
@@ -105,7 +105,7 @@ export default function AdminPayments() {
                         <button
                           onClick={async () => {
                             const token = localStorage.getItem('adminToken');
-                            await fetch(`${API_BASE}/api/admin/payments/${tx.payment_id}/reject`, {
+                            await fetchApi(`/admin/payments/${tx.payment_id}/reject`, {
                               method: 'POST',
                               headers: { 'Authorization': `Bearer ${token}` }
                             });

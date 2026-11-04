@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useLanguage } from '../LanguageContext'
-import { API_BASE } from '../services/api'
+import { fetchApi } from '../services/api'
 import { useWallet } from '../WalletContext'
 import SocketService from '../services/socket'
 
@@ -49,7 +49,7 @@ export default function Lobby() {
   const handleJoin = async (stake) => {
     try {
       const userId = localStorage.getItem('dbUserId')
-      const res = await fetch(`${API_BASE}/api/rooms/join`, {
+      const res = await fetchApi('/rooms/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stake, userId }),

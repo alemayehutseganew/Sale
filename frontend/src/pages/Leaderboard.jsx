@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { fetchApi } from '../services/api'
 
 export default function Leaderboard() {
   const navigate = useNavigate()
@@ -9,7 +8,7 @@ export default function Leaderboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/users/leaderboard`)
+    fetchApi('/users/leaderboard')
       .then((r) => (r.ok ? r.json() : { leaders: [] }))
       .then((data) => setLeaders(data.leaders || []))
       .catch(() => {})

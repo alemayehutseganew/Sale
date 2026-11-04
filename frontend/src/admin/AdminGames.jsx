@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { API_BASE } from '../services/api';
+import { fetchApi } from '../services/api';
 
 export default function AdminGames() {
   const [games, setGames] = useState([]);
@@ -9,7 +9,7 @@ export default function AdminGames() {
     const fetchGames = async () => {
       try {
         const token = localStorage.getItem('adminToken');
-        const res = await fetch(`${API_BASE}/api/admin/games`, {
+        const res = await fetchApi('/admin/games', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWallet } from '../WalletContext'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { fetchApi } from '../services/api'
 
 export default function Wallet() {
   const navigate = useNavigate()
@@ -21,7 +20,7 @@ export default function Wallet() {
 
   const loadUser = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/me`, {
+      const res = await fetchApi('/me', {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       if (res.ok) {
@@ -55,7 +54,7 @@ export default function Wallet() {
     setMessage('')
     setMessageType('')
     try {
-      const res = await fetch(`${API_BASE}/api/wallet/deposit`, {
+      const res = await fetchApi('/wallet/deposit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, amount: Number(depositAmount), reference }),
@@ -83,7 +82,7 @@ export default function Wallet() {
     setMessage('')
     setMessageType('')
     try {
-      const res = await fetch(`${API_BASE}/api/wallet/withdraw`, {
+      const res = await fetchApi('/wallet/withdraw', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, amount: Number(withdrawAmount), provider: 'telebirr', phoneNumber }),

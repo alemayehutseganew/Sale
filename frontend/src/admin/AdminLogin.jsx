@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { API_BASE } from '../services/api'
+import { fetchApi } from '../services/api'
 
 export default function AdminLogin() {
   const navigate = useNavigate()
@@ -12,7 +12,7 @@ export default function AdminLogin() {
     e.preventDefault()
     setError('')
     try {
-      const res = await fetch(`${API_BASE}/api/admin/login`, {
+      const res = await fetchApi('/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),

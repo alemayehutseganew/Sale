@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { API_BASE } from '../services/api'
+import { fetchApi } from '../services/api'
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([])
@@ -9,7 +9,7 @@ export default function AdminUsers() {
   const token = localStorage.getItem('adminToken')
 
   const load = () => {
-    fetch(`${API_BASE}/api/admin/users`, { headers: { Authorization: `Bearer ${token}` } })
+    fetchApi('/admin/users', { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((d) => setUsers(d.users || []))
       .catch(() => {})
@@ -18,7 +18,7 @@ export default function AdminUsers() {
   useEffect(load, [token])
 
   const adjust = async () => {
-    await fetch(`${API_BASE}/api/admin/users/${modal.id}/adjust-balance`, {
+    await fetchApi(`/admin/users/${modal.id}/adjust-balance`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ amount: Number(amount), type }),

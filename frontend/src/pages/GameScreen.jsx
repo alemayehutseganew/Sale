@@ -2,8 +2,7 @@ import { useEffect, useState, Fragment } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SocketService from '../services/socket';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { fetchApi } from '../services/api';
 
 const getBallColor = (letter) => {
   switch(letter) {
@@ -47,7 +46,7 @@ const GameScreen = () => {
 
   useEffect(() => {
     if (!userId) return;
-    fetch(`${API_BASE}/api/rooms/${roomId}/my-cards?userId=${userId}`)
+    fetchApi(`/rooms/${roomId}/my-cards?userId=${userId}`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {

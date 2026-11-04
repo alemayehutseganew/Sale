@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { fetchApi } from '../services/api'
 
 export default function GameHistory() {
   const navigate = useNavigate()
@@ -10,7 +9,7 @@ export default function GameHistory() {
 
   useEffect(() => {
     const userId = localStorage.getItem('dbUserId') || localStorage.getItem('telegram_id') || 1
-    fetch(`${API_BASE}/api/users/history?userId=${userId}`)
+    fetchApi(`/users/history?userId=${userId}`)
       .then((r) => (r.ok ? r.json() : { history: [] }))
       .then((data) => setHistory(data.history || []))
       .catch(() => {})

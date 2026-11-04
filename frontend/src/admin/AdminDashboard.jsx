@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE } from '../services/api';
+import { fetchApi } from '../services/api';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -18,7 +18,7 @@ export default function AdminDashboard() {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('adminToken');
-        const res = await fetch(`${API_BASE}/api/admin/stats`, {
+        const res = await fetchApi('/admin/stats', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
