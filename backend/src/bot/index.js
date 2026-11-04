@@ -17,7 +17,10 @@ bot.catch((err, ctx) => {
 try {
   bot.telegram.setChatMenuButton({
     menu_button: { type: 'commands' }
-  }).then(() => console.log('✅ Menu button forced to COMMANDS mode')).catch(console.error)
+  }).then(() => console.log('✅ Menu button forced to COMMANDS mode')).catch((e) => {
+    console.warn('⚠️ Failed to set bot commands, but server is continuing.')
+    console.error('Bot setup error:', e)
+  })
 
   bot.telegram.setMyCommands([
     { command: 'register', description: 'Register your phone number' },
@@ -29,7 +32,10 @@ try {
     { command: 'withdraw', description: 'Withdraw' },
     { command: 'help', description: 'How to play the game' }
     
-  ]).then(() => console.log('✅ Commands registered')).catch(console.error)
+  ]).then(() => console.log('✅ Commands registered')).catch((e) => {
+    console.warn('⚠️ Failed to set bot commands, but server is continuing.')
+    console.error('Bot setup error:', e)
+  })
 } catch (e) {
   console.error('Bot setup error:', e)
 }
@@ -304,7 +310,13 @@ function launch() {
     console.log('TELEGRAM_BOT_TOKEN not set, skipping bot launch')
     return
   }
-  bot.launch().then(() => console.log('✅ Telegram bot launched')).catch((e) => console.error('Bot launch error:', e))
+  bot.launch().then(() => console.log('✅ Telegram bot launched')).catch((e) => {
+    if (e?.response?.error_code === 409 || String(e?.message || e).includes('409')) {
+      console.warn('⚠️ 409 Conflict: Another bot instance is running. The bot will not respond to messages on this instance.')
+    } else {
+      console.error('Bot launch error:', e)
+    }
+  })
   process.once('SIGINT', () => bot.stop('SIGINT'))
   process.once('SIGTERM', () => bot.stop('SIGTERM'))
 }
