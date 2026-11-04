@@ -81,7 +81,7 @@ const GameScreen = () => {
       alert(`⚠️ ${data.message}`);
       window.location.href = '/';
     });
-    socket.on('countdown_tick', (data) => setCountdown(data.timeLeft));
+    socket.on('countdown_tick', (data) => setCountdown(data.timeLeft ?? data.seconds ?? null));
     socket.on('my_cards', (data) => {
       if (!isSpectator && data.cards && data.cards.length > 0) setCardsData(data.cards);
     });

@@ -419,13 +419,13 @@ function initGameHandler(io) {
         io.to(roomId).emit('room_update', { players: playerCount, stake: rooms[roomId].stake })
 
         // 3. AUTO-START
-        if (rooms[roomId].status === 'WAITING' && playerCount === 2) {
+        if (rooms[roomId].status === 'WAITING' && playerCount >= 2) {
           setTimeout(() => {
             const activeRoom = rooms[roomId]
             const activePlayerCount = activeRoom
               ? new Set(Object.values(activeRoom.players).map((player) => String(player.userId))).size
               : 0
-            if (activeRoom && activeRoom.status === 'WAITING' && activePlayerCount === 2) {
+            if (activeRoom && activeRoom.status === 'WAITING' && activePlayerCount >= 2) {
               startCountdown(io, roomId)
             }
           }, 2000)
