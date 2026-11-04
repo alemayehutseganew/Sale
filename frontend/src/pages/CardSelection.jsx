@@ -78,7 +78,7 @@ export default function CardSelection() {
           </div>
         )}
 
-        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+        <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2 md:gap-3 pb-10">
           {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
             const isTaken = takenCards.includes(cardNumber);
             return (
@@ -87,10 +87,10 @@ export default function CardSelection() {
                 disabled={isTaken || loading}
                 onClick={() => handleCardSelect(cardNumber)}
                 className={`
-                  py-3 rounded font-bold text-sm transition-all
+                  relative flex items-center justify-center py-2 rounded-lg font-bold text-sm transition-all duration-150 ease-in-out
                   ${isTaken
-                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg'
+                    ? 'bg-gray-800 text-gray-600 border-b-4 border-gray-900 cursor-not-allowed opacity-60'
+                    : 'bg-white text-black shadow-md border-b-4 border-gray-300 hover:-translate-y-0.5 hover:shadow-lg active:translate-y-1 active:border-b-0 active:mb-1'
                   }
                 `}
               >
