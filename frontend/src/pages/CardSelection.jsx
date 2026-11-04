@@ -1,114 +1,105 @@
-import { useEffect, useState } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
-import { fetchApi } from '../services/api'
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { fetchApi } from '../services/api';
 
 export default function CardSelection() {
-  const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
-  const { i18n } = useTranslation()
-  const stake = searchParams.get('stake') || '10'
+  const [searchParams] = useSearchParams();
+  const stake = searchParams.get('stake') || '10';
+  const navigate = useNavigate();
 
-  const [takenCards, setTakenCards] = useState(new Set())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [selectedCard, setSelectedCard] = useState(null)
+  const [takenCards, setTakenCards] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    let cancelled = false
-    async function load() {
+    const fetchTakenCards = async () => {
       try {
-        const res = await fetchApi(`/rooms/active-cards?stake=${encodeURIComponent(stake)}`)
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to load taken cards')
-        if (!cancelled) {
-          setTakenCards(new Set(data.takenCards || []))
-          setLoading(false)
+        const res = await fetchApi(`/rooms/active-cards?stake=${stake}`);
+        if (res.ok) {
+          const data = await res.json();
+          setTakenCards(data.takenCards || []);
         }
-      } catch (e) {
-        console.error('Failed to load taken cards', e)
-        if (!cancelled) setError(e.message || 'Network error. Please try again.')
-        setLoading(false)
+      } catch (err) {
+        console.error('Failed to fetch taken cards', err);
       }
-    }
-    load()
-    return () => { cancelled = true }
-  }, [stake])
+    };
+    fetchTakenCards();
+  }, [stake]);
 
   const handleCardSelect = async (cardNumber) => {
-    if (takenCards.has(cardNumber)) return
-    setSelectedCard(cardNumber)
-    const userId = localStorage.getItem('dbUserId')
+    if (takenCards.includes(cardNumber)) return;
+
+    setLoading(true);
+    setError('');
+
     try {
       const res = await fetchApi('/rooms/join', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stake, userId, card_number: cardNumber }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to join room')
-      localStorage.setItem('stake', stake)
-      navigate(`/game?roomId=${data.roomId}&stake=${data.stake}`)
-    } catch (e) {
-      console.error('Failed to join room:', e)
-      setError(e.message || 'Network error. Please try again.')
-      setSelectedCard(null)
-    }
-  }
+        body: JSON.stringify({
+          stake: Number(stake),
+          card_number: cardNumber,
+          userId: localStorage.getItem('dbUserId'),
+        }),
+      });
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#112A46] text-white flex items-center justify-center">
-        Loading available cards...
-      </div>
-    )
-  }
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to join room');
+      }
+
+      navigate(`/game?roomId=${data.roomId}&stake=${stake}`);
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+      if (err.message.includes('taken')) {
+        setTakenCards((prev) => [...prev, cardNumber]);
+      }
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-[#112A46] text-white px-4 py-4 pb-24">
-      {error && <p role="alert" className="mb-3 text-center text-red-300">{error}</p>}
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold">{stake} Birr Per Card</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'am' : 'en')} className="bg-white text-[#112A46] text-xs font-bold px-2 py-1 rounded">
-            {i18n.language === 'en' ? 'AM' : 'EN'}
+    <div className="min-h-screen bg-gray-900 text-white p-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <button
+            onClick={() => navigate('/')}
+            className="text-yellow-500 hover:text-yellow-400 font-bold"
+          >
+            ← Back
           </button>
-          <button className="text-yellow-400">
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
+          <h1 className="text-2xl font-bold">Select Card ({stake} ETB)</h1>
+          <div className="w-12"></div>
+        </div>
+
+        {error && (
+          <div className="bg-red-600 text-white p-3 rounded mb-4 text-center">
+            {error}
+          </div>
+        )}
+
+        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+          {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
+            const isTaken = takenCards.includes(cardNumber);
+            return (
+              <button
+                key={cardNumber}
+                disabled={isTaken || loading}
+                onClick={() => handleCardSelect(cardNumber)}
+                className={`
+                  py-3 rounded font-bold text-sm transition-all
+                  ${isTaken
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg'
+                  }
+                `}
+              >
+                {cardNumber}
+              </button>
+            );
+          })}
         </div>
       </div>
-
-      <p className="text-center text-sm text-gray-400 mb-6">
-        Select your card (1–400). Grayed-out cards are already taken.
-      </p>
-
-      <div className="grid grid-cols-20 gap-1 max-w-4xl mx-auto mb-8">
-        {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
-          const isTaken = takenCards.has(cardNumber)
-          const isSelected = selectedCard === cardNumber
-          return (
-            <button
-              key={cardNumber}
-              onClick={() => handleCardSelect(cardNumber)}
-              disabled={isTaken}
-              className={isTaken
-                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : isSelected
-                  ? 'bg-yellow-400 text-[#112A46] shadow-lg'
-                  : 'bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:text-yellow-400'}
-            >
-              {cardNumber}
-            </button>
-          )
-        })
-      </div>
-
-      <div className="text-center text-xs text-gray-500">
-        Cards 1–400. Card #N always shows the same numbers.
-      </div>
     </div>
-  )
+  );
 }
