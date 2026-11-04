@@ -8,6 +8,51 @@ const rooms = {}
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
 const roomStatusRank = { WAITING: 0, COUNTDOWN: 1, PLAYING: 2, CLAIMING: 3, ENDED: 4 }
 
+function getBallData(number) {
+  if (!Number.isFinite(Number(number))) return null
+
+  const value = Number(number)
+  let letter = 'B'
+  if (value > 15) letter = 'I'
+  if (value > 30) letter = 'N'
+  if (value > 45) letter = 'G'
+  if (value > 60) letter = 'O'
+
+  return { number: value, letter, ball: `${letter}-${value}` }
+}
+
+async function getPlayerCount(roomId) {
+  const result = await db('room_participants')
+    .where({ room_id: roomId })
+    .count('* as count')
+    .first()
+  return Number(result.count)
+}
+
+async function emitCurrentRoomState(socket, roomId, room) {
+  const playerCount = await getPlayerCount(roomId)
+  const calledNumbers = Array.from(room.calledNumbers || [])
+  socket.emit('players_updated', { count: playerCount })
+
+  if (calledNumbers.length > 0) {
+    const lastBall = room.latestNumber || getBallData(calledNumbers[calledNumbers.length - 1])
+    if (lastBall) {
+      socket.emit('new_number_called', {
+        ...lastBall,
+        ball: lastBall.ball || `${lastBall.letter}-${lastBall.number}`,
+        calledNumbers,
+      })
+    }
+  }
+  return playerCount
+}
+
+async function broadcastPlayerCount(io, roomId, room) {
+  const count = await getPlayerCount(roomId)
+  io.to(roomId).emit('players_updated', { count })
+  io.to(roomId).emit('room_update', { players: count, stake: room?.stake })
+}
+
 function scheduleRoomReset(io, roomId, room) {
   room.resetTimeoutId = setTimeout(async () => {
     if (rooms[roomId] !== room || room.status !== 'ENDED') return
@@ -190,10 +235,7 @@ async function startCountdown(io, roomId) {
           }
         }
 
-        io.to(roomId).emit('room_update', {
-          players: Object.keys(room.players).length,
-          stake: room.stake
-        })
+        await broadcastPlayerCount(io, roomId, room)
 
         if (!settlement.success) {
           room.status = 'WAITING'
@@ -234,7 +276,12 @@ async function startCountdown(io, roomId) {
 
           room.latestNumber = { number, letter }
           console.log(`[Game] Calling number: ${letter} ${number}`)
-          io.to(roomId).emit('new_number_called', { number, letter })
+          io.to(roomId).emit('new_number_called', {
+            number,
+            letter,
+            ball: `${letter}-${number}`,
+            calledNumbers: Array.from(room.calledNumbers),
+          })
 
           if (room.calledNumbers.size === 75) {
             clearInterval(room.intervalId)
@@ -273,6 +320,7 @@ function initGameHandler(io) {
 
         const persistedRoom = await db('game_rooms').where({ id: roomId }).first()
         if (!persistedRoom) return socket.emit('error', { message: 'Room not found' })
+        socket.join(roomId)
 
         const participant = await db('room_participants')
           .where({ room_id: roomId, user_id: user.id })
@@ -301,7 +349,9 @@ function initGameHandler(io) {
               status: persistedRoom.status,
               players: {},
               calledNumbers: new Set(Array.isArray(calledNumbers) ? calledNumbers : []),
-              latestNumber: null,
+              latestNumber: Array.isArray(calledNumbers) && calledNumbers.length > 0
+                ? getBallData(calledNumbers[calledNumbers.length - 1])
+                : null,
               intervalId: null
             }
           } else if ((roomStatusRank[persistedRoom.status] ?? -1) >= (roomStatusRank[rooms[roomId].status] ?? -1)) {
@@ -310,10 +360,11 @@ function initGameHandler(io) {
         }
 
         if (persistedRoom.status === 'ENDED') {
+          const playerCount = await emitCurrentRoomState(socket, roomId, rooms[roomId])
           return socket.emit('game_in_progress', {
             message: 'This game has ended. Please wait for the next round.',
             status: persistedRoom.status,
-            players: rooms[roomId] ? Object.keys(rooms[roomId].players).length : 0,
+            players: playerCount,
             calledNumbers: [],
             currentBall: null
           })
@@ -322,12 +373,12 @@ function initGameHandler(io) {
         // Reconnecting during an active round never restores player status.
         if (['PLAYING', 'CLAIMING', 'COUNTDOWN'].includes(persistedRoom.status)) {
           const room = rooms[roomId]
-          socket.join(roomId)
+          const playerCount = await emitCurrentRoomState(socket, roomId, room)
           socket.emit('game_in_progress', {
             message: 'A game is in progress. Please wait for the next round.',
             currentBall: room.latestNumber || null,
             calledNumbers: Array.from(room.calledNumbers),
-            players: Object.keys(room.players).length,
+            players: playerCount,
             status: room.status
           })
           return
@@ -351,7 +402,6 @@ function initGameHandler(io) {
         }
 
         rooms[roomId].players[socket.id] = { socketId: socket.id, userId: user.id }
-        socket.join(roomId)
         const playerCards = await db('room_card_selections')
           .where({ room_id: roomId, user_id: user.id })
         socket.emit('my_cards', {
@@ -361,11 +411,11 @@ function initGameHandler(io) {
           })),
         })
 
-        const playerCount = new Set(
-          Object.values(rooms[roomId].players).map((player) => String(player.userId))
-        ).size
+        const playerCount = await getPlayerCount(roomId)
+        await emitCurrentRoomState(socket, roomId, rooms[roomId])
         console.log(`[Game] Player ${user.id} joined. Total players: ${playerCount}`)
 
+        io.to(roomId).emit('players_updated', { count: playerCount })
         io.to(roomId).emit('room_update', { players: playerCount, stake: rooms[roomId].stake })
 
         // 3. AUTO-START
@@ -392,6 +442,7 @@ function initGameHandler(io) {
 
         socket.join(roomId)
         console.log(`[Spectator] User ${userId} is watching room ${roomId}`)
+        await emitCurrentRoomState(socket, roomId, room)
 
         socket.emit('spectator_sync', {
           calledNumbers: Array.from(room.calledNumbers),
@@ -433,10 +484,7 @@ function initGameHandler(io) {
       delete room.players[socket.id]
       if (room.readyPlayers) room.readyPlayers.delete(socket.id)
       
-      io.to(roomId).emit('room_update', {
-        players: Object.keys(room.players).length,
-        readyPlayers: room.readyPlayers ? room.readyPlayers.size : 0
-      })
+      await broadcastPlayerCount(io, roomId, room)
     }
     socket.leave(roomId)
   } catch (err) {
@@ -646,10 +694,7 @@ function initGameHandler(io) {
         delete room.players[socket.id]
         if (room.readyPlayers) room.readyPlayers.delete(userId)
         
-        io.to(roomId).emit('room_update', {
-          players: Object.keys(room.players).length,
-          readyPlayers: room.readyPlayers ? room.readyPlayers.size : 0
-        })
+        await broadcastPlayerCount(io, roomId, room)
       }
     }
   } catch (err) {

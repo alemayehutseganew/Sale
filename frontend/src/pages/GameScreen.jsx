@@ -30,7 +30,8 @@ const GameScreen = () => {
   const [calledHistory, setCalledHistory] = useState([]);
   const [markedNumbers, setMarkedNumbers] = useState([]);
   const [cardsData, setCardsData] = useState([]);
-  const [playersCount, setPlayersCount] = useState(0);
+  const [playerCount, setPlayerCount] = useState(0);
+  const playersCount = playerCount;
   const [readyPlayers, setReadyPlayers] = useState(0);
   const [countdown, setCountdown] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
@@ -49,8 +50,11 @@ const GameScreen = () => {
     };
 
     socket.on('room_update', (data) => {
-      if (Number.isFinite(Number(data.players))) setPlayersCount(Number(data.players));
+      if (Number.isFinite(Number(data.players))) setPlayerCount(Number(data.players));
       if (Number.isFinite(Number(data.readyPlayers))) setReadyPlayers(Number(data.readyPlayers));
+    });
+    socket.on('players_updated', (data) => {
+      if (Number.isFinite(Number(data.count))) setPlayerCount(Number(data.count));
     });
     socket.on('game_in_progress', (data) => {
       setCardsData([]);
@@ -58,17 +62,16 @@ const GameScreen = () => {
       setGameStarted(false);
       setSpectatorNumbers(data.calledNumbers || []);
       setSpectatorBall(data.currentBall || null);
-      if (Number.isFinite(Number(data.players))) setPlayersCount(Number(data.players));
+      if (Number.isFinite(Number(data.players))) setPlayerCount(Number(data.players));
       if (!isSpectator) {
         navigate(`/game?roomId=${encodeURIComponent(roomId)}&stake=${stake}&spectator=true`, { replace: true });
         return;
       }
-      socket.emit('join_as_spectator', { roomId, userId });
     });
     socket.on('spectator_sync', (data) => {
       setSpectatorNumbers(data.calledNumbers || []);
       setSpectatorBall(data.currentBall || null);
-      if (Number.isFinite(Number(data.players))) setPlayersCount(Number(data.players));
+      if (Number.isFinite(Number(data.players))) setPlayerCount(Number(data.players));
     });
     socket.on('insufficient_funds', (data) => {
       alert(`💰 ${data.message}`);
@@ -87,15 +90,23 @@ const GameScreen = () => {
       setGameStarted(true);
     });
     socket.on('new_number_called', (data) => {
-      playBallCall(data.ball || `${data.letter}-${data.number}`);
+      const ball = data.ball || `${data.letter}-${data.number}`;
+      playBallCall(ball);
+      const [ballLetter, ballNumber] = ball.split('-');
+      const number = Number(data.number ?? ballNumber);
+      const letter = data.letter || ballLetter;
+      if (!Number.isFinite(number) || !letter) return;
 
-      const { number, letter } = data;
+      setCurrentBall({ number, letter });
+      setCalledNumbers(data.calledNumbers || (prev => (
+        prev.includes(number) ? prev : [...prev, number]
+      )));
       if (isSpectator) {
         setSpectatorBall({ number, letter });
-        setSpectatorNumbers(prev => [...prev, number]);
+        setSpectatorNumbers(data.calledNumbers || (prev => (
+          prev.includes(number) ? prev : [...prev, number]
+        )));
       } else {
-        setCurrentBall({ number, letter });
-        setCalledNumbers(prev => [...prev, number]);
         setCalledHistory(prev => [...prev.slice(-4), { number, letter }]);
       }
     });
@@ -152,6 +163,7 @@ const GameScreen = () => {
     return () => {
       socket.off('connect', handleJoin);
       socket.off('room_update');
+      socket.off('players_updated');
       socket.off('game_in_progress');
       socket.off('spectator_sync');
       socket.off('insufficient_funds');
