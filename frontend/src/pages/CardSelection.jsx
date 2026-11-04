@@ -60,7 +60,7 @@ export default function CardSelection() {
     return (
       <div className="min-h-screen bg-[#112A46] text-white flex items-center justify-center">
         Loading available cards...
-      </div>
+
     )
   }
 
@@ -78,8 +78,8 @@ export default function CardSelection() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
-        </div>
-      </div>
+
+
 
       <div className="grid grid-cols-20 gap-1 max-w-4xl mx-auto mb-8">
         {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
@@ -102,9 +102,9 @@ export default function CardSelection() {
             </button>
           )
         })}
-      </div>
 
-      </div>
-    </div>
+
+
+
    )</div>
 }
