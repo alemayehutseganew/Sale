@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SocketService from '../services/socket';
 import { fetchApi } from '../services/api';
+import { playBallCall } from '../utils/bingoSounds';
 
 const getBallColor = (letter) => {
   switch(letter) {
@@ -40,10 +41,6 @@ const GameScreen = () => {
   const [bingoMessage, setBingoMessage] = useState(null);
   const [gameResult, setGameResult] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
-
-  const numberCallSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2181/2181-preview.mp3');
-  const winSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3');
-  const loseSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2016/2016-preview.mp3');
 
   useEffect(() => {
     if (!userId) return;
@@ -100,6 +97,8 @@ const GameScreen = () => {
       setGameStarted(true);
     });
     socket.on('new_number_called', ({ number, letter }) => {
+      if (soundEnabled) playBallCall(`${letter}-${number}`);
+
       if (isSpectator) {
         setSpectatorBall({ number, letter });
         setSpectatorNumbers(prev => [...prev, number]);
@@ -107,11 +106,6 @@ const GameScreen = () => {
         setCurrentBall({ number, letter });
         setCalledNumbers(prev => [...prev, number]);
         setCalledHistory(prev => [...prev.slice(-4), { number, letter }]);
-        if (soundEnabled) {
-          numberCallSound.currentTime = 0;
-          numberCallSound.play().catch(() => {});
-          speakNumber(number, letter);
-        }
       }
     });
     socket.on('game_over', (data) => {
@@ -128,10 +122,8 @@ const GameScreen = () => {
 
       if (isWinner) {
         setGameResult({ type: 'win', title: '🎉 Congratulations!', message: `You won ETB ${Number(data.payout).toFixed(2)}!` });
-        if (soundEnabled && winSound) winSound.play().catch(() => {});
       } else {
         setGameResult({ type: 'loss', title: '🎲 Game Over', message: `The winner is ${data.winnerName || 'a player'}. Better luck next time!` });
-        if (soundEnabled && loseSound) loseSound.play().catch(() => {});
       }
       setTimeout(() => { setGameResult(null); navigate('/'); }, 5000);
     });
@@ -176,17 +168,6 @@ const GameScreen = () => {
       socket.off('bingo_result');
     };
   }, [socket, roomId, userId, stake, soundEnabled, isSpectator, navigate]);
-
-  const speakNumber = (number, letter) => {
-    if (!window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const text = `${letter} ${number}`;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'am-ET';
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    window.speechSynthesis.speak(utterance);
-  };
 
   const handleDaub = (num) => {
     if (!calledNumbers.map(Number).includes(Number(num))) return;

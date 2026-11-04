@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchApi } from '../services/api';
+import { unlockAudio } from '../utils/bingoSounds';
 
 export default function CardSelection() {
   const [searchParams] = useSearchParams();
@@ -29,6 +30,7 @@ export default function CardSelection() {
   const handleCardSelect = async (cardNumber) => {
     if (takenCards.includes(cardNumber)) return;
 
+    unlockAudio();
     setLoading(true);
     setError('');
 
