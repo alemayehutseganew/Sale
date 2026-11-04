@@ -2,7 +2,6 @@ import { useEffect, useState, Fragment } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SocketService from '../services/socket';
-import { fetchApi } from '../services/api';
 import { getMuteState, playBallCall, toggleMute } from '../utils/bingoSounds';
 
 const getBallColor = (letter) => {
@@ -35,7 +34,7 @@ const GameScreen = () => {
   const [readyPlayers, setReadyPlayers] = useState(0);
   const [countdown, setCountdown] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
-  const [isSpectator, setIsSpectator] = useState(spectatorFromUrl);
+  const isSpectator = spectatorFromUrl;
   const [spectatorNumbers, setSpectatorNumbers] = useState([]);
   const [spectatorBall, setSpectatorBall] = useState(null);
   const [bingoMessage, setBingoMessage] = useState(null);
@@ -44,21 +43,9 @@ const GameScreen = () => {
 
   useEffect(() => {
     if (!userId) return;
-    fetchApi(`/rooms/${roomId}/my-cards?userId=${userId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data) && data.length > 0) {
-          setCardsData(data.map(c => ({ id: c.id, matrix: c.matrix })));
-        }
-      })
-      .catch(err => console.error("Failed to fetch cards:", err));
-  }, [roomId, userId]);
-  useEffect(() => {
-    if (!userId) return;
 
     const handleJoin = () => {
       socket.emit('join_room', { roomId, userId, stake, spectator: isSpectator });
-      socket.emit('get_my_cards', { roomId, userId });
     };
 
     socket.on('room_update', (data) => {
@@ -66,13 +53,16 @@ const GameScreen = () => {
       if (Number.isFinite(Number(data.readyPlayers))) setReadyPlayers(Number(data.readyPlayers));
     });
     socket.on('game_in_progress', (data) => {
-      setIsSpectator(true);
       setCardsData([]);
       setMarkedNumbers([]);
       setGameStarted(false);
       setSpectatorNumbers(data.calledNumbers || []);
       setSpectatorBall(data.currentBall || null);
       if (Number.isFinite(Number(data.players))) setPlayersCount(Number(data.players));
+      if (!isSpectator) {
+        navigate(`/game?roomId=${encodeURIComponent(roomId)}&stake=${stake}&spectator=true`, { replace: true });
+        return;
+      }
       socket.emit('join_as_spectator', { roomId, userId });
     });
     socket.on('spectator_sync', (data) => {

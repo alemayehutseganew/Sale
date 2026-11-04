@@ -319,20 +319,18 @@ function initGameHandler(io) {
           })
         }
 
-        // A room participant without an assigned card is not an active player.
+        // Reconnecting during an active round never restores player status.
         if (['PLAYING', 'CLAIMING', 'COUNTDOWN'].includes(persistedRoom.status)) {
-          if (!participant || !cardSelection) {
-            const room = rooms[roomId]
-            socket.join(roomId)
-            socket.emit('game_in_progress', {
-              message: 'A game is in progress. Please wait for the next round.',
-              currentBall: room.latestNumber || null,
-              calledNumbers: Array.from(room.calledNumbers),
-              players: Object.keys(room.players).length,
-              status: room.status
-            })
-            return
-          }
+          const room = rooms[roomId]
+          socket.join(roomId)
+          socket.emit('game_in_progress', {
+            message: 'A game is in progress. Please wait for the next round.',
+            currentBall: room.latestNumber || null,
+            calledNumbers: Array.from(room.calledNumbers),
+            players: Object.keys(room.players).length,
+            status: room.status
+          })
+          return
         }
 
         if (!participant || !cardSelection) {
@@ -354,6 +352,14 @@ function initGameHandler(io) {
 
         rooms[roomId].players[socket.id] = { socketId: socket.id, userId: user.id }
         socket.join(roomId)
+        const playerCards = await db('room_card_selections')
+          .where({ room_id: roomId, user_id: user.id })
+        socket.emit('my_cards', {
+          cards: playerCards.map((selection) => ({
+            id: selection.card_id,
+            matrix: typeof selection.card === 'string' ? JSON.parse(selection.card) : selection.card,
+          })),
+        })
 
         const playerCount = new Set(
           Object.values(rooms[roomId].players).map((player) => String(player.userId))
@@ -581,6 +587,15 @@ function initGameHandler(io) {
             const u2 = await db('users').where({ telegram_id: uid }).first()
             if (u2) uid = u2.id
           }
+        }
+        const persistedRoom = await db('game_rooms').where({ id: roomId }).first()
+        const isRejoiningActiveGame =
+          persistedRoom &&
+          ['COUNTDOWN', 'PLAYING', 'CLAIMING'].includes(persistedRoom.status) &&
+          !rooms[roomId]?.players?.[socket.id]
+        if (isRejoiningActiveGame) {
+          socket.emit('my_cards', { cards: [] })
+          return
         }
         const participant = uid
           ? await db('room_participants').where({ room_id: roomId, user_id: uid }).first()

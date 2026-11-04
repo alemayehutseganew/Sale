@@ -14,14 +14,16 @@ router.get('/', async (req, res) => {
   }
 })
 
-// GET /api/rooms/active-cards?stake=X — returns taken card_ids for waiting rooms of this stake
+// GET /api/rooms/active-cards?stake=X — returns cards reserved in active rooms for this stake
 router.get('/active-cards', async (req, res) => {
   try {
     const stake = Number(req.query.stake)
     if (!stake) {
       return res.status(400).json({ error: 'stake is required' })
     }
-    const rooms = await db('game_rooms').where({ stake_amount: stake, status: 'WAITING' })
+    const rooms = await db('game_rooms')
+      .where({ stake_amount: stake })
+      .whereIn('status', ['WAITING', 'COUNTDOWN', 'PLAYING', 'CLAIMING'])
     const roomIds = rooms.map((r) => r.id)
     if (roomIds.length === 0) {
       return res.json({ takenCards: [] })
@@ -29,7 +31,7 @@ router.get('/active-cards', async (req, res) => {
     const taken = await db('room_card_selections')
       .whereIn('room_id', roomIds)
       .select('card_id')
-    res.json({ takenCards: taken.map((t) => t.card_id) })
+    res.json({ takenCards: [...new Set(taken.map((t) => Number(t.card_id)))] })
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch active cards' })
   }
@@ -66,27 +68,6 @@ router.post('/join', async (req, res) => {
         .first()
 
       if (activeRoom) {
-        const participant = await trx('room_participants')
-          .where({ room_id: activeRoom.id, user_id: user.id })
-          .first()
-        const cardSelection = participant
-          ? await trx('room_card_selections')
-            .where({ room_id: activeRoom.id, user_id: user.id })
-            .first()
-          : null
-
-        if (participant && cardSelection) {
-          return {
-            room: activeRoom,
-            card: {
-              id: cardSelection.card_id,
-              matrix: typeof cardSelection.card === 'string'
-                ? JSON.parse(cardSelection.card)
-                : cardSelection.card,
-            },
-          }
-        }
-
         return { status: 'spectator', room: activeRoom }
       }
 
