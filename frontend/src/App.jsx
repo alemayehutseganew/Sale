@@ -53,6 +53,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Lobby />} />
             <Route path="/card-selection" element={<CardSelection />} />
+            <Route path="/select-card" element={<CardSelection />} />
             <Route path="/select-cards" element={<CardSelection />} />
             <Route path="/game" element={<GameScreen />} />
             <Route path="/wallet" element={<Wallet />} />
