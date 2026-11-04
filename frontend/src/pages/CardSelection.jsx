@@ -48,6 +48,11 @@ export default function CardSelection() {
         throw new Error(data.error || 'Failed to join room');
       }
 
+      if (data.status === 'spectator') {
+        navigate(`/game?roomId=${data.roomId}&stake=${stake}&spectator=true`);
+        return;
+      }
+
       navigate(`/game?roomId=${data.roomId}&stake=${stake}`);
     } catch (err) {
       setError(err.message);

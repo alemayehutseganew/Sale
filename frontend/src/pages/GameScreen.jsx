@@ -21,6 +21,7 @@ const GameScreen = () => {
   const navigate = useNavigate();
   const roomId = searchParams.get('roomId') || 'room_10';
   const stake = parseInt(searchParams.get('stake')) || 10;
+  const spectatorFromUrl = searchParams.get('spectator') === 'true';
   const userId = localStorage.getItem('dbUserId');
   const { i18n } = useTranslation();
 
@@ -33,7 +34,7 @@ const GameScreen = () => {
   const [readyPlayers, setReadyPlayers] = useState(0);
   const [countdown, setCountdown] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
-  const [isSpectator, setIsSpectator] = useState(false);
+  const [isSpectator, setIsSpectator] = useState(spectatorFromUrl);
   const [spectatorNumbers, setSpectatorNumbers] = useState([]);
   const [spectatorBall, setSpectatorBall] = useState(null);
   const [bingoMessage, setBingoMessage] = useState(null);
@@ -59,7 +60,7 @@ const GameScreen = () => {
     if (!userId) return;
 
     const handleJoin = () => {
-      socket.emit('join_room', { roomId, userId, stake });
+      socket.emit('join_room', { roomId, userId, stake, spectator: isSpectator });
       socket.emit('get_my_cards', { roomId, userId });
     };
 
@@ -114,10 +115,17 @@ const GameScreen = () => {
       }
     });
     socket.on('game_over', (data) => {
-      if (isSpectator) return
-
       const myId = String(userId);
       const isWinner = data.winnerIds?.some(id => String(id) === myId);
+      if (isSpectator) {
+        setGameResult({
+          type: 'loss',
+          title: '🎲 Game Over',
+          message: `The winner is ${data.winnerName || 'a player'}. Better luck next time!`,
+        });
+        return;
+      }
+
       if (isWinner) {
         setGameResult({ type: 'win', title: '🎉 Congratulations!', message: `You won ETB ${Number(data.payout).toFixed(2)}!` });
         if (soundEnabled && winSound) winSound.play().catch(() => {});
@@ -130,11 +138,18 @@ const GameScreen = () => {
     socket.on('game_ended_for_spectators', () => {
       if (!isSpectator) return
 
-      setIsSpectator(false);
+      setGameResult((current) => current || {
+        type: 'loss',
+        title: '🎲 Game Over',
+        message: 'This round has ended. The next round will be ready shortly.',
+      });
+    });
+    socket.on('next_game_ready', (data) => {
+      if (!isSpectator) return
+      setGameResult(null);
       setSpectatorNumbers([]);
       setSpectatorBall(null);
-      sessionStorage.removeItem('activeRoomId');
-      navigate('/');
+      navigate(`/select-card?stake=${data.stake || stake}`);
     });
     socket.on('bingo_result', (data) => {
       setBingoMessage(data);
@@ -157,6 +172,7 @@ const GameScreen = () => {
       socket.off('new_number_called');
       socket.off('game_over');
       socket.off('game_ended_for_spectators');
+      socket.off('next_game_ready');
       socket.off('bingo_result');
     };
   }, [socket, roomId, userId, stake, soundEnabled, isSpectator, navigate]);
@@ -195,68 +211,89 @@ const GameScreen = () => {
 
   if (isSpectator) {
     return (
-      <div className="min-h-screen bg-[#1e3a5f] text-white p-4 flex flex-col items-center">
-        <div className="w-full max-w-md bg-yellow-500 text-[#112A46] font-bold text-center py-2 rounded-t-xl flex justify-center items-center gap-2 shadow-lg">
-          <span className="animate-pulse">👀</span> GAME IN PROGRESS
-        </div>
-        <div className="w-full max-w-md bg-[#112A46] p-6 rounded-b-xl shadow-2xl flex flex-col items-center border border-blue-900">
-          <div className="w-full flex justify-between items-center text-sm font-bold text-gray-300 mb-4 border-b border-gray-700 pb-3">
-            <span>Players: <span className="text-yellow-400">{playersCount}</span></span>
-            <span>Balls: <span className="text-yellow-400">{spectatorNumbers.length}/75</span></span>
-          </div>
-
-          <div className="mb-6">
-            {spectatorBall ? (
-              <div className={`w-32 h-32 rounded-full border-8 flex flex-col items-center justify-center shadow-xl ${getBallColor(spectatorBall.letter)}`}>
-                <span className="text-2xl font-bold text-white mt-1">{spectatorBall.letter}</span>
-                <span className="text-6xl font-bold text-white">{spectatorBall.number}</span>
+      <div className="min-h-screen bg-[#1e3a5f] text-white p-4 font-sans">
+        <div className="mx-auto w-full max-w-5xl">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-[#112A46] p-3 shadow-md">
+            <div className="flex flex-wrap gap-2 text-xs font-bold sm:text-sm">
+              <div className="rounded bg-[#2A4B6E] px-3 py-1">Win: --</div>
+              <div className="rounded bg-[#2A4B6E] px-3 py-1">Stake: {stake || '--'}</div>
+              <div className="rounded bg-[#2A4B6E] px-3 py-1">
+                Call: {spectatorBall ? `${spectatorBall.letter}-${spectatorBall.number}` : '--'}
               </div>
-            ) : (
-              <div className="w-32 h-32 rounded-full bg-gray-600 flex items-center justify-center animate-pulse">
-                <span className="text-4xl text-white">-</span>
-              </div>
-            )}
+              <div className="rounded bg-[#2A4B6E] px-3 py-1">Players: {playersCount}</div>
+            </div>
+            <div className="flex gap-1 text-xs">
+              <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'am' : 'en')} className="rounded bg-[#2A4B6E] px-3 py-1 hover:bg-[#3A5B7E]">
+                {i18n.language === 'en' ? 'AM' : 'EN'}
+              </button>
+              <button onClick={() => setSoundEnabled(!soundEnabled)} className={`rounded px-3 py-1 ${soundEnabled ? 'bg-green-600' : 'bg-[#2A4B6E]'}`}>
+                {soundEnabled ? 'SND' : 'MUTE'}
+              </button>
+            </div>
           </div>
 
-          <div className="flex gap-2 mb-6">
-            {spectatorHistory.slice(-5).reverse().map((num) => {
-              let letter = 'B';
-              if (num > 15) letter = 'I';
-              if (num > 30) letter = 'N';
-              if (num > 45) letter = 'G';
-              if (num > 60) letter = 'O';
-              return (
-                <div key={num} className={`w-10 h-10 rounded-full border-2 flex items-center justify-center font-bold text-sm ${getBallColor(letter)}`}>
-                  {num}
-                </div>
-              );
-            })}
+          <div className="mb-4 rounded-xl border border-blue-500 bg-blue-900/80 p-4 text-center shadow-lg">
+            <p className="mb-1 text-lg font-bold">እባክዎ በትእግስት ይጠብቁ!</p>
+            <p className="text-sm text-blue-200">ጨዋታው እየተካሄደ ነው። የሚቀጥለው ዙር ሲጀምር መጫወት ይችላሉ።</p>
           </div>
 
-          <div className="grid grid-cols-5 gap-1 w-full mb-6 max-h-48 overflow-y-auto p-2 bg-[#0d1f33] rounded-lg">
-            {Array.from({ length: 75 }, (_, i) => i + 1).map((num) => {
-              const isCalled = spectatorNumbers.includes(num);
-              let letter = 'B';
-              if (num > 15) letter = 'I';
-              if (num > 30) letter = 'N';
-              if (num > 45) letter = 'G';
-              if (num > 60) letter = 'O';
-              return (
-                <div key={num} className={`text-center text-xs py-1 rounded ${isCalled ? getBallColor(letter).split(' ')[0] + ' text-white font-bold' : 'bg-[#1e3a5f] text-gray-500'}`}>
-                  {num}
+          <div className="rounded-xl border border-blue-900 bg-[#112A46] p-4 shadow-2xl sm:p-6">
+            <div className="mb-5 flex flex-col items-center">
+              {spectatorBall ? (
+                <div className={`flex h-36 w-36 flex-col items-center justify-center rounded-full border-8 shadow-xl ${getBallColor(spectatorBall.letter)}`}>
+                  <span className="mt-1 text-2xl font-bold text-white">{spectatorBall.letter}</span>
+                  <span className="text-6xl font-bold text-white">{spectatorBall.number}</span>
                 </div>
-              );
-            })}
-          </div>
-          <div className="text-center mt-2">
-            <p className="text-yellow-400 text-lg font-bold mb-2">🎮 ጨዋታው በመካሄድ ላይ ነው!</p>
-            <p className="text-gray-300 text-sm leading-relaxed">
-              እባክዎ ይጠብቁ። አሁን በሚካሄደው ጨዋታ ተጠናቅቆ አዲሱ ጨዋታ ሲጀመር በራስ-ሰር ወደ ጨዋታው ይገባሉ።
-              <br /><br />
-              መልካም ጨዋታ!
-            </p>
+              ) : (
+                <div className="flex h-36 w-36 animate-pulse items-center justify-center rounded-full bg-gray-600">
+                  <span className="text-4xl text-white">-</span>
+                </div>
+              )}
+              <p className="mt-2 text-sm text-gray-300">Balls called: {spectatorNumbers.length}/75</p>
+            </div>
+
+            <div className="mb-4 flex min-h-10 justify-center gap-2">
+              {spectatorHistory.slice(-5).reverse().map((num) => {
+                let letter = 'B';
+                if (num > 15) letter = 'I';
+                if (num > 30) letter = 'N';
+                if (num > 45) letter = 'G';
+                if (num > 60) letter = 'O';
+                return (
+                  <div key={num} className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${getBallColor(letter)}`}>
+                    {num}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid max-h-80 grid-cols-5 gap-1 overflow-y-auto rounded-lg bg-[#0d1f33] p-2 sm:grid-cols-10">
+              {Array.from({ length: 75 }, (_, i) => i + 1).map((num) => {
+                const isCalled = spectatorNumbers.includes(num);
+                let letter = 'B';
+                if (num > 15) letter = 'I';
+                if (num > 30) letter = 'N';
+                if (num > 45) letter = 'G';
+                if (num > 60) letter = 'O';
+                return (
+                  <div key={num} className={`rounded py-1 text-center text-xs ${isCalled ? `${getBallColor(letter).split(' ')[0]} font-bold text-white` : 'bg-[#1e3a5f] text-gray-500'}`}>
+                    {num}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
+
+        {gameResult && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+            <div className="w-full max-w-sm rounded-2xl border-4 border-red-500 bg-[#112A46] p-8 text-center">
+              <h2 className="mb-4 text-4xl font-bold text-red-400">{gameResult.title}</h2>
+              <p className="text-xl text-white">{gameResult.message}</p>
+              <p className="mt-4 text-sm text-blue-200">Returning to card selection when the next round is ready...</p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

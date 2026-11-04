@@ -58,6 +58,38 @@ router.post('/join', async (req, res) => {
       console.log('[join] Transaction started')
       await trx.raw('SELECT pg_advisory_xact_lock(hashtext(?))', [`game_rooms:${stake}`])
 
+      const activeRoom = await trx('game_rooms')
+        .where({ stake_amount: stake })
+        .whereIn('status', ['COUNTDOWN', 'PLAYING', 'CLAIMING'])
+        .orderBy('created_at', 'desc')
+        .forUpdate()
+        .first()
+
+      if (activeRoom) {
+        const participant = await trx('room_participants')
+          .where({ room_id: activeRoom.id, user_id: user.id })
+          .first()
+        const cardSelection = participant
+          ? await trx('room_card_selections')
+            .where({ room_id: activeRoom.id, user_id: user.id })
+            .first()
+          : null
+
+        if (participant && cardSelection) {
+          return {
+            room: activeRoom,
+            card: {
+              id: cardSelection.card_id,
+              matrix: typeof cardSelection.card === 'string'
+                ? JSON.parse(cardSelection.card)
+                : cardSelection.card,
+            },
+          }
+        }
+
+        return { status: 'spectator', room: activeRoom }
+      }
+
       // 4. FIND OR CREATE ROOM
       const waitingRooms = await trx('game_rooms')
         .where({ stake_amount: stake, status: 'WAITING' })
@@ -144,6 +176,19 @@ router.post('/join', async (req, res) => {
          },
        }
     })
+
+    if (result.status === 'spectator') {
+       const io = req.app.get('io')
+       if (io) {
+         await io.in(`user_${user.id}`).socketsJoin(result.room.id)
+       }
+       return res.json({
+         status: 'spectator',
+         roomId: result.room.id,
+         stake: result.room.stake_amount,
+         message: 'Game already in progress',
+       })
+    }
 
     console.log('[join] Sending response:', result.room.id)
     return res.json({ roomId: result.room.id, stake: result.room.stake_amount, card: result.card })

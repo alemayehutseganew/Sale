@@ -100,13 +100,30 @@ async function startCountdown(io, roomId) {
             .forUpdate()
 
           if (participants.length < 2) {
-            return { success: false, error: 'NOT_ENOUGH_PLAYERS', poorPlayers: [] }
+            return {
+              success: false,
+              error: 'NOT_ENOUGH_PLAYERS',
+              poorPlayers: [],
+              cardlessPlayers: [],
+            }
           }
 
           const validPlayers = []
           const poorPlayers = []
+          const cardlessPlayers = []
 
           for (const participant of participants) {
+            const cardSelection = await trx('room_card_selections')
+              .where({ room_id: roomId, user_id: participant.user_id })
+              .first()
+            if (!cardSelection) {
+              cardlessPlayers.push(participant)
+              await trx('room_participants')
+                .where({ room_id: roomId, user_id: participant.user_id })
+                .del()
+              continue
+            }
+
             const user = await trx('users')
               .where({ id: participant.user_id })
               .forUpdate()
@@ -119,6 +136,10 @@ async function startCountdown(io, roomId) {
             }
           }
 
+          if (validPlayers.length + poorPlayers.length < 2) {
+            return { success: false, error: 'NOT_ENOUGH_PLAYERS', poorPlayers, cardlessPlayers }
+          }
+
           for (const poorPlayer of poorPlayers) {
             await trx('room_participants')
               .where({ room_id: roomId, user_id: poorPlayer.user_id })
@@ -128,8 +149,14 @@ async function startCountdown(io, roomId) {
               .del()
           }
 
+          for (const cardlessPlayer of cardlessPlayers) {
+            await trx('room_card_selections')
+              .where({ room_id: roomId, user_id: cardlessPlayer.user_id })
+              .del()
+          }
+
           if (validPlayers.length < 2) {
-            return { success: false, error: 'NOT_ENOUGH_VALID_PLAYERS', poorPlayers }
+            return { success: false, error: 'NOT_ENOUGH_VALID_PLAYERS', poorPlayers, cardlessPlayers }
           }
 
           for (const validPlayer of validPlayers) {
@@ -142,8 +169,25 @@ async function startCountdown(io, roomId) {
           }
           await trx('game_rooms').where({ id: roomId }).update({ status: 'PLAYING' })
 
-          return { success: true, validPlayerCount: validPlayers.length, poorPlayers }
+          return { success: true, validPlayerCount: validPlayers.length, poorPlayers, cardlessPlayers }
         })
+
+        for (const cardlessPlayer of settlement.cardlessPlayers) {
+          const playerSocketId = Object.keys(room.players).find((id) => (
+            String(room.players[id].userId) === String(cardlessPlayer.user_id)
+          ))
+          if (playerSocketId) {
+            io.to(playerSocketId).emit('game_aborted', {
+              message: 'Your card was not assigned. Please select a card for the next round.'
+            })
+            try {
+              await io.in(playerSocketId).socketsLeave(roomId)
+            } catch (err) {
+              console.error('[Game] Failed to remove player without a card:', err)
+            }
+            delete room.players[playerSocketId]
+          }
+        }
 
         for (const poorPlayer of settlement.poorPlayers) {
           const playerSocketId = Object.keys(room.players).find((id) => (
@@ -234,7 +278,7 @@ function initGameHandler(io) {
       socket.join(`user_${socket.data.userId}`)
     }
 
-    socket.on('join_room', async ({ roomId, userId, stake }) => {
+    socket.on('join_room', async ({ roomId, userId, stake, spectator }) => {
       try {
         let user = null
         if (userId) {
@@ -249,6 +293,19 @@ function initGameHandler(io) {
         const participant = await db('room_participants')
           .where({ room_id: roomId, user_id: user.id })
           .first()
+        const cardSelection = participant
+          ? await db('room_card_selections')
+            .where({ room_id: roomId, user_id: user.id })
+            .first()
+          : null
+
+        if (spectator && persistedRoom.status === 'WAITING' && (!participant || !cardSelection)) {
+          socket.emit('next_game_ready', {
+            roomId,
+            stake: persistedRoom.stake_amount,
+          })
+          return
+        }
 
         if (persistedRoom.status !== 'WAITING') {
           if (!rooms[roomId]) {
@@ -278,10 +335,11 @@ function initGameHandler(io) {
           })
         }
 
-        // 1. SPECTATOR CHECK
-        if (rooms[roomId] && ['PLAYING', 'CLAIMING', 'COUNTDOWN'].includes(rooms[roomId].status)) {
-          if (!participant) {
+        // A room participant without an assigned card is not an active player.
+        if (['PLAYING', 'CLAIMING', 'COUNTDOWN'].includes(persistedRoom.status)) {
+          if (!participant || !cardSelection) {
             const room = rooms[roomId]
+            socket.join(roomId)
             socket.emit('game_in_progress', {
               message: 'A game is in progress. Please wait for the next round.',
               currentBall: room.latestNumber || null,
@@ -293,7 +351,7 @@ function initGameHandler(io) {
           }
         }
 
-        if (!participant) {
+        if (!participant || !cardSelection) {
           return socket.emit('error', { message: 'Join the room before playing.' })
         }
 
