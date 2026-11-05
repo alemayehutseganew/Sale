@@ -160,7 +160,7 @@ async function verifyTelebirrReference({ reference, expectedAmount, userId } = {
 
   const receiverNumber = process.env.TELEBIRR_RECEIVER_NUMBER
   if (!receipt.creditedPartyAccountNo || !isAccountMatch(receipt.creditedPartyAccountNo, receiverNumber)) {
-    throw verificationError('Receipt was not paid to the configured Telebirr account.')
+    throw verificationError('Receipt was not paid to the configured Telebirr account. Please send to the correct number.')
   }
 
   const parsedAmount = parseTelebirrAmount(receipt.settledAmount)
