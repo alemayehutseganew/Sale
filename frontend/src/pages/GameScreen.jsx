@@ -49,6 +49,7 @@ const GameScreen = () => {
   const { t, i18n } = useTranslation();
   const { changeLanguage } = useLanguage();
   const translationRef = useRef(t);
+  const noWinnerRoundRef = useRef(false);
   useEffect(() => {
     translationRef.current = t;
   }, [t]);
@@ -162,7 +163,17 @@ const GameScreen = () => {
       }
       setTimeout(() => { setGameResult(null); navigate('/'); }, 5000);
     });
-    socket.on('game_ended_for_spectators', () => {
+    socket.on('game_ended_for_spectators', (data) => {
+      if (data?.noWinner) {
+        noWinnerRoundRef.current = true;
+        setGameResult({
+          type: 'loss',
+          title: translate('gameOver'),
+          message: translate('noWinner'),
+        });
+        return;
+      }
+
       if (!isSpectator) return
 
       setGameResult((current) => current || {
@@ -179,7 +190,7 @@ const GameScreen = () => {
       navigate(`/select-card?stake=${data.stake || stake}`);
     });
     socket.on('room_reset', (data) => {
-      if (!isSpectator) return
+      if (!isSpectator && !noWinnerRoundRef.current) return
       setGameResult(null);
       setSpectatorNumbers([]);
       setSpectatorBall(null);

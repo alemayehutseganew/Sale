@@ -288,7 +288,7 @@ async function startCountdown(io, roomId) {
             room.intervalId = null
             room.status = 'ENDED'
             await db('game_rooms').where({ id: roomId }).update({ status: 'ENDED' })
-            io.to(roomId).emit('game_ended_for_spectators')
+            io.to(roomId).emit('game_ended_for_spectators', { noWinner: true })
             scheduleRoomReset(io, roomId, room)
           }
         }, 3000)
