@@ -1,12 +1,20 @@
 const path = require('path')
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true })
 
+const criticalEnvVars = ['LINKS_ET_API_KEY', 'TELEBIRR_RECEIVER_NUMBER']
+const missingCriticalEnvVars = criticalEnvVars.filter(v => !process.env[v])
+if (missingCriticalEnvVars.length > 0) {
+  console.error('❌ CRITICAL ERROR: Missing required Telebirr configuration:', missingCriticalEnvVars.join(', '))
+  process.exit(1)
+}
+
 const requiredEnvVars = [
   'DATABASE_URL',
   'TELEGRAM_BOT_TOKEN',
   'JWT_SECRET',
   'TELEBIRR_RECEIVER_NUMBER',
   'TELEBIRR_RECEIVER_NAME',
+  'LINKS_ET_API_KEY',
   'FRONTEND_URL'
 ];
 

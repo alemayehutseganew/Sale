@@ -1,7 +1,8 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../db')
-const ps = require('../services/paymentService')
+const authMiddleware = require('../../middleware/auth')
+const { creditVerifiedDeposit } = require('../services/paymentService')
 
 // GET /api/wallet/balance?userId=...
 router.get('/balance', async (req, res) => {
@@ -19,18 +20,22 @@ router.get('/balance', async (req, res) => {
 })
 
 // POST /api/wallet/deposit (manual Telebirr receipt verification)
-router.post('/deposit', async (req, res) => {
+router.post('/deposit', authMiddleware, async (req, res) => {
   try {
-    const { userId, amount, reference } = req.body
-    if (!userId || !amount || !reference) return res.status(400).json({ error: 'Missing fields' })
-    const user = await db('users').where({ id: userId }).orWhere({ telegram_id: userId }).first()
-    if (!user) return res.status(404).json({ error: 'User not found' })
+    const { amount, reference } = req.body || {}
+    if (amount === undefined || !reference) return res.status(400).json({ error: 'Missing fields' })
 
-    const result = await ps.processDeposit(user.id, amount, reference)
-    if (result.error) return res.status(400).json({ error: result.error })
+    const result = await creditVerifiedDeposit({ userId: req.user.id, amount, reference })
     res.json({ success: true, newBalance: result.newBalance })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'This transaction has already been used' })
+    }
+    if (err.statusCode === 400 || err.statusCode === 404) {
+      return res.status(err.statusCode).json({ error: err.message })
+    }
+    console.error('[wallet] Deposit processing failed:', err.message)
+    return res.status(500).json({ error: 'Unable to process deposit.' })
   }
 })
 

@@ -1,5 +1,75 @@
 const db = require('../db')
 
+function verificationError(message) {
+  const error = new Error(message)
+  error.statusCode = 400
+  return error
+}
+
+function normalizeTelebirrNumber(value, allowMask = false) {
+  if (typeof value !== 'string' && typeof value !== 'number') return ''
+  let number = String(value).replace(allowMask ? /[^0-9*]/g : /[^0-9]/g, '')
+  if (number.startsWith('251')) number = number.slice(3)
+  if (number.startsWith('0')) number = number.slice(1)
+  return number
+}
+
+function isAccountMatch(maskedReceiptAccount, expectedTeleBirrNumber) {
+  const cleanMasked = normalizeTelebirrNumber(maskedReceiptAccount, true)
+  const cleanExpected = normalizeTelebirrNumber(expectedTeleBirrNumber)
+  if (!cleanMasked || !cleanExpected) return false
+  if (!cleanMasked.includes('*')) return cleanMasked === cleanExpected
+
+  const parts = cleanMasked.split('*').filter(Boolean)
+  if (parts.length === 0 || !parts[0] || !parts[parts.length - 1]) return false
+  if (!cleanExpected.startsWith(parts[0]) || !cleanExpected.endsWith(parts[parts.length - 1])) return false
+
+  let searchIndex = parts[0].length
+  for (let i = 1; i < parts.length - 1; i++) {
+    const index = cleanExpected.indexOf(parts[i], searchIndex)
+    if (index === -1) return false
+    searchIndex = index + parts[i].length
+  }
+  return true
+}
+
+function parseTelebirrAmount(value) {
+  const match = String(value ?? '').match(/[\d,]+(?:\.\d+)?/)
+  if (!match) return NaN
+  return Number(match[0].replace(/,/g, ''))
+}
+
+function parseTelebirrPaymentDate(value) {
+  const match = typeof value === 'string'
+    ? value.match(/^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2}):(\d{2})$/)
+    : null
+  if (!match) throw verificationError('Receipt payment date is missing or invalid.')
+
+  const [, dayText, monthText, yearText, hourText, minuteText, secondText] = match
+  const day = Number(dayText)
+  const month = Number(monthText)
+  const year = Number(yearText)
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  const second = Number(secondText)
+  const localTime = Date.UTC(year, month - 1, day, hour, minute, second)
+  const parsed = new Date(localTime)
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day ||
+    parsed.getUTCHours() !== hour ||
+    parsed.getUTCMinutes() !== minute ||
+    parsed.getUTCSeconds() !== second
+  ) {
+    throw verificationError('Receipt payment date is missing or invalid.')
+  }
+
+  // Telebirr timestamps are Ethiopia local time (UTC+03:00).
+  return localTime - (3 * 60 * 60 * 1000)
+}
+
 function parseTelebirrSMS(smsText) {
   if (!smsText) return null
 
@@ -30,119 +100,173 @@ function parseTelebirrSMS(smsText) {
   }
 }
 
-async function verifyTelebirrReceipt(reference) {
-  try {
-    const apiKey = process.env.LINKS_ET_API_KEY;
-    if (!apiKey) {
-      console.error('[links.et] API key is missing');
-      return { success: false, error: 'Verification service not configured.' };
-    }
+async function verifyTelebirrReference({ reference, expectedAmount, userId } = {}) {
+  if (typeof reference !== 'string' || !/^[A-Z0-9]{6,20}$/.test(reference)) {
+    throw verificationError('Invalid Telebirr transaction reference.')
+  }
 
-    const response = await fetch('https://links.et/api/verify', {
+  const amountToMatch = Number(expectedAmount)
+  if (!Number.isFinite(amountToMatch) || amountToMatch <= 0) {
+    throw verificationError('A valid deposit amount is required.')
+  }
+
+  const normalizedUserId = Number(userId)
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    throw verificationError('A valid user is required for receipt verification.')
+  }
+
+  const apiKey = process.env.LINKS_ET_API_KEY
+  if (!apiKey) {
+    throw new Error('Receipt verification service is not configured.')
+  }
+
+  let response
+  try {
+    response = await fetch('https://links.et/api/verify', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': apiKey
+        'x-api-key': apiKey,
+        'Idempotency-Key': `verify-${reference}-${normalizedUserId}`,
       },
-      body: JSON.stringify({
-        reference: reference // e.g., "DK23KZROXJ"
-      })
-    });
-
-    const data = await response.json();
-
-    if (!data.ok) {
-      return { 
-        success: false, 
-        error: data.error || 'Receipt not found or invalid.' 
-      };
-    }
-
-    const receipt = data.receipt || {};
-
-    if (receipt.source !== 'telebirr-html') {
-      return { success: false, error: 'This is not a valid Telebirr receipt.' };
-    }
-
-    const amountString = receipt.settledAmount || receipt.totalPaidAmount;
-    const amountMatch = String(amountString).match(/([0-9.]+)/);
-    const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
-
-    if (amount <= 0) {
-      return { success: false, error: 'Could not extract a valid amount from the receipt.' };
-    }
-
-    const VALID_RECEIVER_NAMES = ['KEDIR SHIFAW KEBEDE', 'KEDIR SHIFAW'];
-    const receiverName = receipt.creditedPartyName || '';
-    const isValidName = VALID_RECEIVER_NAMES.some(name => receiverName.toUpperCase().includes(name));
-    if (receiverName && !isValidName) {
-      return { 
-        success: false, 
-        error: `Receipt was sent to ${receiverName}, not to our platform account.` 
-      };
-    }
-
-    if (receipt.transactionStatus && receipt.transactionStatus !== 'Completed') {
-      return { 
-        success: false, 
-        error: `Transaction status is "${receipt.transactionStatus}", not completed.` 
-      };
-    }
-
-    return {
-      success: true,
-      amount: amount,
-      payerName: receipt.payerName || 'Unknown',
-      receiverName: receiverName,
-      transactionId: receipt.receiptNo || reference,
-      status: 'Completed'
-    };
-  } catch (err) {
-    console.error('[links.et] Verification error:', err.message);
-    return { 
-      success: false, 
-      error: 'Unable to reach verification service. Please try again later.' 
-    };
+      body: JSON.stringify({ reference }),
+    })
+  } catch {
+    throw verificationError('Unable to reach the receipt verification service.')
   }
+
+  if (!response.ok) {
+    throw verificationError(`Receipt verification service returned HTTP ${response.status}.`)
+  }
+
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    throw verificationError('Receipt verification service returned an invalid response.')
+  }
+
+  if (data?.ok !== true || !data.receipt || typeof data.receipt !== 'object') {
+    throw verificationError('Receipt was not found or could not be verified.')
+  }
+
+  const receipt = data.receipt
+  if (receipt.source !== 'telebirr-html') {
+    throw verificationError('This is not a valid Telebirr receipt.')
+  }
+  if (receipt.transactionStatus !== 'Completed') {
+    throw verificationError('Telebirr transaction is not completed.')
+  }
+
+  const receiverNumber = process.env.TELEBIRR_RECEIVER_NUMBER
+  if (!receipt.creditedPartyAccountNo || !isAccountMatch(receipt.creditedPartyAccountNo, receiverNumber)) {
+    throw verificationError('Receipt was not paid to the configured Telebirr account.')
+  }
+
+  const parsedAmount = parseTelebirrAmount(receipt.settledAmount)
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+    throw verificationError('Could not extract a valid amount from the receipt.')
+  }
+  const amountDifference = Math.abs(parsedAmount - amountToMatch)
+  const floatingPointTolerance = Number.EPSILON * Math.max(parsedAmount, amountToMatch) * 2
+  if (amountDifference > 0.01 + floatingPointTolerance) {
+    throw verificationError('Receipt amount does not match the deposit amount.')
+  }
+
+  const paymentTime = parseTelebirrPaymentDate(receipt.paymentDate)
+  const maxAgeMinutes = process.env.TELEBIRR_MAX_AGE_MINUTES === undefined
+    ? 15
+    : Number(process.env.TELEBIRR_MAX_AGE_MINUTES)
+  if (!Number.isFinite(maxAgeMinutes) || maxAgeMinutes <= 0) {
+    throw new Error('TELEBIRR_MAX_AGE_MINUTES configuration is invalid.')
+  }
+
+  const ageMilliseconds = Date.now() - paymentTime
+  if (ageMilliseconds > maxAgeMinutes * 60 * 1000) {
+    throw verificationError('Telebirr receipt has expired.')
+  }
+  if (ageMilliseconds < -2 * 60 * 1000) {
+    throw verificationError('Telebirr receipt payment date is in the future.')
+  }
+
+  return { reference, amount: parsedAmount, rawResponse: data }
 }
 
-async function processDeposit(userId, amount, reference) {
-  const existing = await db('payments').where({ transaction_reference: reference }).first()
-  if (existing) return { error: 'This receipt has already been used.' }
-
-  const verify = await verifyTelebirrReceipt(reference)
-  if (!verify.success) return { error: 'Invalid receipt' }
-  if (Math.abs(verify.amount - Number(amount)) > 0.001) {
-    return { error: 'Amount mismatch' }
-  }
-
+async function creditVerifiedDeposit({ userId, reference, amount }) {
+  const verification = await verifyTelebirrReference({ reference, expectedAmount: amount, userId })
   let newBalance
+
   await db.transaction(async (trx) => {
+    const user = await trx('users').where({ id: userId }).forUpdate().first()
+    if (!user) {
+      const error = new Error('User not found.')
+      error.statusCode = 404
+      throw error
+    }
+
+    await trx('verified_transactions').insert({
+      reference: verification.reference,
+      user_id: userId,
+      amount: verification.amount,
+      provider: 'telebirr',
+      raw_response: verification.rawResponse,
+    })
+    await trx('users').where({ id: userId }).increment('wallet_balance', verification.amount)
+    await trx('financial_ledger').insert({
+      user_id: userId,
+      type: 'deposit',
+      amount: verification.amount,
+      reference: verification.reference,
+    })
     await trx('payments').insert({
       user_id: userId,
       type: 'deposit',
       provider: 'telebirr',
-      amount: verify.amount,
-      status: 'VERIFIED',
-      transaction_reference: reference,
-      provider_response: { payerName: verify.payerName },
+      amount: verification.amount,
+      status: 'approved',
+      transaction_reference: verification.reference,
+      provider_response: verification.rawResponse,
     })
-    await trx('users').where({ id: userId }).increment('wallet_balance', verify.amount)
-    const hasLedger = await trx.schema.hasTable('financial_ledger')
-    if (hasLedger) {
-      await trx('financial_ledger').insert({
-        user_id: userId,
-        type: 'DEPOSIT',
-        amount: verify.amount,
-        reference: reference,
-        created_at: new Date(),
-      })
-    }
-    const u = await trx('users').where({ id: userId }).first()
-    newBalance = u.wallet_balance
+
+    const updatedUser = await trx('users').where({ id: userId }).first()
+    newBalance = updatedUser.wallet_balance
   })
 
-  return { success: true, newBalance }
+  return { ...verification, newBalance }
 }
 
-module.exports = { verifyTelebirrReceipt, processDeposit, parseTelebirrSMS }
+async function verifyTelebirrReceipt(reference, expectedAmount, userId) {
+  try {
+    const verified = await verifyTelebirrReference({ reference, expectedAmount, userId })
+    const receipt = verified.rawResponse.receipt
+    return {
+      success: true,
+      amount: verified.amount,
+      payerName: receipt.payerName || 'Unknown',
+      receiverName: receipt.creditedPartyName || '',
+      transactionId: receipt.receiptNo || reference,
+      status: 'Completed',
+      rawResponse: verified.rawResponse,
+    }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+}
+
+async function processDeposit(userId, amount, reference) {
+  try {
+    const result = await creditVerifiedDeposit({ userId, amount, reference })
+    return { success: true, newBalance: result.newBalance }
+  } catch (error) {
+    return { error: error.message, code: error.code }
+  }
+}
+
+module.exports = {
+  verifyTelebirrReference,
+  verifyTelebirrReceipt,
+  creditVerifiedDeposit,
+  processDeposit,
+  parseTelebirrSMS,
+  isAccountMatch,
+}

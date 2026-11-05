@@ -1,6 +1,6 @@
 const { Telegraf, Markup } = require('telegraf')
 const db = require('../db')
-const { parseTelebirrSMS, verifyTelebirrReceipt } = require('../services/paymentService')
+const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/paymentService')
 const { getT } = require('./translations')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ked-seven.vercel.app'
@@ -165,38 +165,30 @@ bot.on('text', async (ctx) => {
         return ctx.reply(t.deposit_invalid).catch(() => {})
       }
 
-      const official = await verifyTelebirrReceipt(parsedFromSMS.transactionId)
-      if (!official.success) {
-        return ctx.reply(`${t.deposit_verify_fail}${official.error}`).catch(() => {})
-      }
-
-      if (Math.abs(official.amount - parsedFromSMS.amount) > 0.01) {
-        return ctx.reply(`${t.deposit_mismatch}${parsedFromSMS.amount}${t.deposit_mismatch2}${official.amount} ETB.`).catch(() => {})
-      }
-
-      const existing = await db('payments').where({ transaction_reference: parsedFromSMS.transactionId }).first()
-      if (existing) {
-        return ctx.reply(t.deposit_used).catch(() => {})
-      }
-
       const user = await db('users').where({ telegram_id: ctx.from.id }).first()
       if (!user) {
         return ctx.reply(t.user_not_found).catch(() => {})
       }
 
-      await db.transaction(async (trx) => {
-        await trx('payments').insert({
-          user_id: user.id,
-          amount: official.amount,
-          transaction_reference: parsedFromSMS.transactionId,
-          provider: 'telebirr',
-          status: 'pending',
-          type: 'deposit',
-          provider_response: JSON.stringify({ payerName: official.payerName, receiverName: official.receiverName })
+      let deposit
+      try {
+        deposit = await creditVerifiedDeposit({
+          userId: user.id,
+          reference: parsedFromSMS.transactionId,
+          amount: parsedFromSMS.amount,
         })
-      })
+      } catch (err) {
+        if (err.code === '23505') {
+          return ctx.reply(t.deposit_used).catch(() => {})
+        }
+        if (err.statusCode === 400) {
+          return ctx.reply(`${t.deposit_verify_fail}${err.message}`).catch(() => {})
+        }
+        console.error('[BOT] Deposit processing failed:', err.message)
+        return ctx.reply(t.deposit_verify_fail).catch(() => {})
+      }
 
-      ctx.reply(`${t.deposit_success}${official.amount.toFixed(2)}${t.deposit_success2}`).catch(() => {})
+      ctx.reply(`${t.deposit_success}${deposit.amount.toFixed(2)}${t.deposit_success2}`).catch(() => {})
       delete userStates[ctx.from.id]
       return
     }

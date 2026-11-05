@@ -58,8 +58,8 @@ export default function Wallet() {
     try {
       const res = await fetchApi('/wallet/deposit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, amount: Number(depositAmount), reference }),
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: JSON.stringify({ amount: Number(depositAmount), reference }),
       })
       const data = await res.json()
       if (data.success) {
