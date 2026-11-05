@@ -6,6 +6,78 @@ function verificationError(message) {
   return error
 }
 
+function retryableVerificationError(message) {
+  const error = verificationError(message)
+  error.retryable = true
+  return error
+}
+
+function getLinksEtErrorMessage(data, fallback) {
+  if (typeof data?.error === 'string' && data.error) return data.error
+  if (typeof data?.error?.message === 'string' && data.error.message) return data.error.message
+  return fallback
+}
+
+function logLinksEtResponse(status, data) {
+  console.log('[TELEBIRR VERIFY] links.et response:', {
+    status,
+    error: data?.error,
+  })
+}
+
+function delay(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds))
+}
+
+async function fetchLinksEt(url, options, timeoutMilliseconds) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMilliseconds)
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (error) {
+    const message = error.name === 'AbortError'
+      ? 'links.et request timed out.'
+      : 'Unable to reach the receipt verification service.'
+    throw retryableVerificationError(message)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function readLinksEtResponse(response) {
+  let data
+  try {
+    data = await response.json()
+  } catch {
+    logLinksEtResponse(response.status, null)
+    throw verificationError(`links.et returned an invalid response (HTTP ${response.status}).`)
+  }
+
+  logLinksEtResponse(response.status, data)
+  return data
+}
+
+function getVerificationStatusUrl(data) {
+  const statusPath = data.statusUrl ||
+    (data.requestId ? `/api/verify/${encodeURIComponent(data.requestId)}` : null)
+  if (!statusPath) {
+    throw verificationError('links.et returned an incomplete asynchronous verification response.')
+  }
+
+  let statusUrl
+  try {
+    statusUrl = new URL(statusPath, 'https://links.et')
+  } catch {
+    throw verificationError('links.et returned an invalid verification status URL.')
+  }
+
+  if (statusUrl.origin !== 'https://links.et' || !statusUrl.pathname.startsWith('/api/verify/')) {
+    throw verificationError('links.et returned an invalid verification status URL.')
+  }
+  return statusUrl.toString()
+}
+
 function normalizeTelebirrNumber(value, allowMask = false) {
   if (typeof value !== 'string' && typeof value !== 'number') return ''
   let number = String(value).replace(allowMask ? /[^0-9*]/g : /[^0-9]/g, '')
@@ -73,8 +145,9 @@ function parseTelebirrPaymentDate(value) {
 function parseTelebirrSMS(smsText) {
   if (!smsText) return null
 
-  const idMatch = smsText.match(/Your transaction number is\s+([A-Z0-9]+)/i)
-  const transactionId = idMatch ? idMatch[1] : null
+  const idMatch = smsText.match(/(?:transaction number is|transaction number|reference)[\s:]*([A-Z0-9]{6,20})\b/i)
+  const receiptUrlMatch = smsText.match(/transactioninfo\.ethiotelecom\.et\/receipt\/([A-Z0-9]{6,20})\b/i)
+  const transactionId = (idMatch?.[1] || receiptUrlMatch?.[1] || '').toUpperCase() || null
 
   const amountMatch = smsText.match(/(?:paid|transferred)\s+ETB\s+([0-9.]+)/i)
   const amount = amountMatch ? parseFloat(amountMatch[1]) : null
@@ -120,34 +193,76 @@ async function verifyTelebirrReference({ reference, expectedAmount, userId } = {
     throw new Error('Receipt verification service is not configured.')
   }
 
-  let response
-  try {
-    response = await fetch('https://links.et/api/verify', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'Idempotency-Key': `verify-${reference}-${normalizedUserId}`,
-      },
-      body: JSON.stringify({ reference }),
-    })
-  } catch {
-    throw verificationError('Unable to reach the receipt verification service.')
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'Idempotency-Key': `verify-${reference}-${normalizedUserId}`,
   }
-
-  if (!response.ok) {
-    throw verificationError(`Receipt verification service returned HTTP ${response.status}.`)
-  }
-
   let data
-  try {
-    data = await response.json()
-  } catch {
-    throw verificationError('Receipt verification service returned an invalid response.')
+  let lastRetryableError
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetchLinksEt('https://links.et/api/verify', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ reference, waitMs: 30000 }),
+      }, 35000)
+      data = await readLinksEtResponse(response)
+
+      if (response.status === 202) {
+        const statusUrl = getVerificationStatusUrl(data)
+        let completed = false
+
+        for (let pollAttempt = 0; pollAttempt < 5; pollAttempt++) {
+          await delay(2000)
+          const pollResponse = await fetchLinksEt(statusUrl, {
+            method: 'GET',
+            headers: { 'x-api-key': apiKey },
+          }, 10000)
+          data = await readLinksEtResponse(pollResponse)
+
+          if (pollResponse.status === 202) continue
+          if (!pollResponse.ok || data?.ok !== true) {
+            throw verificationError(getLinksEtErrorMessage(
+              data,
+              `Receipt verification failed (HTTP ${pollResponse.status}).`,
+            ))
+          }
+
+          completed = true
+          break
+        }
+
+        if (!completed) {
+          throw retryableVerificationError('links.et verification did not finish before polling timed out.')
+        }
+      } else if (!response.ok || data?.ok !== true) {
+        throw verificationError(getLinksEtErrorMessage(
+          data,
+          `Receipt verification failed (HTTP ${response.status}).`,
+        ))
+      }
+
+      break
+    } catch (error) {
+      if (!error.retryable) throw error
+
+      lastRetryableError = error
+      console.error('[TELEBIRR VERIFY] Attempt failed:', error.message)
+      if (attempt === 3) break
+      await delay(3000)
+    }
+  }
+
+  if (!data?.receipt || typeof data.receipt !== 'object') {
+    throw verificationError(lastRetryableError
+      ? "Telebirr's server is currently slow. Please try again in a few minutes."
+      : 'Receipt was not found or could not be verified.')
   }
 
   if (data?.ok !== true || !data.receipt || typeof data.receipt !== 'object') {
-    throw verificationError('Receipt was not found or could not be verified.')
+    throw verificationError(getLinksEtErrorMessage(data, 'Receipt was not found or could not be verified.'))
   }
 
   const receipt = data.receipt

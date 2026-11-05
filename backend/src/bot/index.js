@@ -162,13 +162,15 @@ bot.on('text', async (ctx) => {
     if (state === 'WAITING_FOR_RECEIPT') {
       const parsedFromSMS = parseTelebirrSMS(ctx.message.text)
       if (!parsedFromSMS) {
-        return ctx.reply(t.deposit_invalid).catch(() => {})
+        return ctx.reply('Could not find a valid transaction number in that SMS.').catch(() => {})
       }
 
       const user = await db('users').where({ telegram_id: ctx.from.id }).first()
       if (!user) {
         return ctx.reply(t.user_not_found).catch(() => {})
       }
+
+      console.log('[TELEBIRR VERIFY] Extracted Reference:', parsedFromSMS.transactionId)
 
       let deposit
       try {
