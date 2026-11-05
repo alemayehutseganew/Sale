@@ -1,6 +1,7 @@
 const { Telegraf, Markup } = require('telegraf')
 const db = require('../db')
 const { parseTelebirrSMS, verifyTelebirrReceipt } = require('../services/paymentService')
+const { getT } = require('./translations')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ked-seven.vercel.app'
 const userStates = {}
@@ -22,25 +23,21 @@ async function getUserLanguage(telegramId) {
 }
 
 function getMainMenu(lang = 'en') {
-  const texts = {
-    en: { play: '🎮 Play Game', balance: '💰 Check Balance', deposit: '💳 Deposit', withdraw: '💸 Withdraw', room: '🏠 My Room', help: '❓ Help' },
-    am: { play: '🎮 ጨዋታ ይጫወቱ', balance: '💰 ቀሪ ሂሳብ', deposit: '💳 ገንዘብ ያስገቡ', withdraw: '💸 ገንዘብ ያውጡ', room: '🏠 ክፍሌ', help: '❓ እርዳታ' }
-  }
-  const t = texts[lang] || texts.en
+  const t = getT(lang)
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: t.play, web_app: { url: FRONTEND_URL } }],
-        [{ text: t.balance, callback_data: 'menu_balance' }, { text: t.deposit, callback_data: 'menu_deposit' }],
-        [{ text: t.withdraw, callback_data: 'menu_withdraw' }, { text: t.room, callback_data: 'menu_room' }],
-        [{ text: t.help, callback_data: 'menu_help' }]
+        [{ text: t.play_btn, web_app: { url: FRONTEND_URL } }],
+        [{ text: t.btn_balance, callback_data: 'menu_balance' }, { text: t.btn_deposit, callback_data: 'menu_deposit' }],
+        [{ text: t.btn_withdraw, callback_data: 'menu_withdraw' }, { text: t.btn_room, callback_data: 'menu_room' }],
+        [{ text: t.btn_help, callback_data: 'menu_help' }]
       ]
     }
   }
 }
 
 bot.start((ctx) => {
-  ctx.reply('Please select your language / እባክዎ ቋንቋ ይምረጡ:', {
+  ctx.reply(getT('en').choose_lang, {
     reply_markup: {
       inline_keyboard: [
         [{ text: '🇬🇧 English', callback_data: 'lang_en' }, { text: '🇪🇹 አማርኛ', callback_data: 'lang_am' }]
@@ -56,7 +53,7 @@ bot.action('lang_en', async (ctx) => {
   } catch (err) {
     console.error('Failed to set English language:', err.message)
   }
-  ctx.reply('Language set to English.', getMainMenu('en')).catch(() => {})
+  ctx.reply(getT('en').lang_set_en, getMainMenu('en')).catch(() => {})
 })
 
 bot.action('lang_am', async (ctx) => {
@@ -66,92 +63,98 @@ bot.action('lang_am', async (ctx) => {
   } catch (err) {
     console.error('Failed to set Amharic language:', err.message)
   }
-  ctx.reply('ቋንቋ ወደ አማርኛ ተቀይሯል።', getMainMenu('am')).catch(() => {})
+  ctx.reply(getT('am').lang_set_am, getMainMenu('am')).catch(() => {})
 })
 
 bot.command('menu', async (ctx) => {
   const lang = await getUserLanguage(ctx.from.id)
-  ctx.reply('Main menu:', getMainMenu(lang)).catch(() => {})
+  ctx.reply(getT(lang).main_menu, getMainMenu(lang)).catch(() => {})
 })
 
-bot.command('play', (ctx) => {
-  ctx.reply('Tap the button below to launch the game:', {
-    reply_markup: { inline_keyboard: [[{ text: '🎰 Play Bingo', web_app: { url: FRONTEND_URL } }]] }
+bot.command('play', async (ctx) => {
+  const t = getT(await getUserLanguage(ctx.from.id))
+  ctx.reply(t.play_prompt, {
+    reply_markup: { inline_keyboard: [[{ text: t.play_btn, web_app: { url: FRONTEND_URL } }]] }
   }).catch(() => {})
 })
 
 bot.command('balance', async (ctx) => {
+  const t = getT(await getUserLanguage(ctx.from.id))
   try {
     const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-    if (user) ctx.reply(`💰 Your current balance is: ETB ${Number(user.wallet_balance || 0).toFixed(2)}`)
-    else ctx.reply('User not found. Please open the Mini App first to register.')
+    if (user) ctx.reply(`${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`)
+    else ctx.reply(t.user_not_found)
   } catch (err) {
     console.error('Failed to fetch balance:', err.message)
-    ctx.reply('❌ Failed to fetch balance.').catch(() => {})
+    ctx.reply(t.err_balance).catch(() => {})
   }
 })
 
-bot.command('help', (ctx) => {
-  ctx.reply('📖 How to Play GOBINGO\n\n1. Open the Mini App.\n2. Select a stake.\n3. Choose a card.\n4. Wait for game start.\n5. Tap numbers when called.\n6. Complete a line and press BINGO!\n\nGood luck!').catch(() => {})
+bot.command('help', async (ctx) => {
+  ctx.reply(getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
 })
 
-bot.command('register', (ctx) => {
+bot.command('register', async (ctx) => {
+  const t = getT(await getUserLanguage(ctx.from.id))
   return ctx.reply(
-    'To complete your registration, please share your phone number:',
+    t.register_prompt,
     Markup.keyboard([
-      [Markup.button.contactRequest('📱 Share Phone Number')]
+      [Markup.button.contactRequest(t.register_btn)]
     ]).resize().oneTime()
   )
 })
 
-bot.command('deposit', (ctx) => {
+bot.command('deposit', async (ctx) => {
   userStates[ctx.from.id] = 'WAITING_FOR_RECEIPT'
-  ctx.reply('💳 To Deposit:\n\n👤 Name: Kedir Shifaw kebede\n📱 Telebirr: 0930702649\n\n1. Open your Telebirr app\n2. Send money to the number above\n3. Copy the SMS you receive\n\n👇 Now paste the full SMS here:').catch(() => {})
+  ctx.reply(getT(await getUserLanguage(ctx.from.id)).deposit_inst).catch(() => {})
 })
 
-bot.command('withdraw', (ctx) => {
+bot.command('withdraw', async (ctx) => {
   userStates[ctx.from.id] = 'WAITING_FOR_WITHDRAW_AMOUNT'
-  ctx.reply('Enter the amount you want to withdraw (Minimum 100 ETB):').catch(() => {})
+  ctx.reply(getT(await getUserLanguage(ctx.from.id)).withdraw_prompt).catch(() => {})
 })
 
 bot.action('menu_balance', async (ctx) => {
+  const t = getT(await getUserLanguage(ctx.from.id))
   try {
     await ctx.answerCbQuery().catch(() => {})
     const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-    if (!user) return ctx.reply('User not found. Please open the Mini App first to register.')
-    ctx.reply(`💰 Your current balance is: ETB ${Number(user.wallet_balance || 0).toFixed(2)}`).catch(() => {})
+    if (!user) return ctx.reply(t.user_not_found)
+    ctx.reply(`${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`).catch(() => {})
   } catch (err) {
     console.error('Balance Error:', err)
-    ctx.reply('❌ Failed to fetch balance.').catch(() => {})
+    ctx.reply(t.err_balance).catch(() => {})
   }
 })
 
 bot.action('menu_deposit', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   userStates[ctx.from.id] = 'WAITING_FOR_RECEIPT'
-  const msg = '💳 To Deposit:\n\n👤 Name: Kedir Shifaw kebede\n📱 Telebirr: 0930702649\n\n1. Open your Telebirr app\n2. Send money to the number above\n3. Copy the SMS you receive\n\n👇 Now paste the full SMS here:'
+  const msg = getT(await getUserLanguage(ctx.from.id)).deposit_inst
   ctx.reply(msg).catch(() => {})
 })
 
 bot.action('menu_withdraw', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   userStates[ctx.from.id] = 'WAITING_FOR_WITHDRAW_AMOUNT'
-  ctx.reply('Enter the amount you want to withdraw (Minimum 100 ETB):').catch(() => {})
+  ctx.reply(getT(await getUserLanguage(ctx.from.id)).withdraw_prompt).catch(() => {})
 })
 
 bot.action('menu_room', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
-  ctx.reply('To join a room, please open the Mini App and select a stake.', {
-    reply_markup: { inline_keyboard: [[{ text: 'Open Lobby', web_app: { url: FRONTEND_URL } }]] }
+  const t = getT(await getUserLanguage(ctx.from.id))
+  ctx.reply(t.room_prompt, {
+    reply_markup: { inline_keyboard: [[{ text: t.open_lobby, web_app: { url: FRONTEND_URL } }]] }
   }).catch(() => {})
 })
 
 bot.action('menu_help', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
-  ctx.reply('📖 How to Play GOBINGO\n\n1. Open the Mini App.\n2. Select a stake.\n3. Choose a card.\n4. Wait for game start.\n5. Tap numbers when called.\n6. Complete a line and press BINGO!\n\nGood luck!').catch(() => {})
+  ctx.reply(getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
 })
 
 bot.on('text', async (ctx) => {
+  const t = getT(await getUserLanguage(ctx.from.id))
   try {
     const state = userStates[ctx.from.id]
     if (!state) return
@@ -159,26 +162,26 @@ bot.on('text', async (ctx) => {
     if (state === 'WAITING_FOR_RECEIPT') {
       const parsedFromSMS = parseTelebirrSMS(ctx.message.text)
       if (!parsedFromSMS) {
-        return ctx.reply('❌ Invalid receipt format. Please copy the entire SMS you received from Telebirr and paste it here.').catch(() => {})
+        return ctx.reply(t.deposit_invalid).catch(() => {})
       }
 
       const official = await verifyTelebirrReceipt(parsedFromSMS.transactionId)
       if (!official.success) {
-        return ctx.reply(`❌ Verification failed: ${official.error}`).catch(() => {})
+        return ctx.reply(`${t.deposit_verify_fail}${official.error}`).catch(() => {})
       }
 
       if (Math.abs(official.amount - parsedFromSMS.amount) > 0.01) {
-        return ctx.reply(`❌ Amount mismatch. Your SMS says ${parsedFromSMS.amount} ETB but Telebirr shows ${official.amount} ETB.`).catch(() => {})
+        return ctx.reply(`${t.deposit_mismatch}${parsedFromSMS.amount}${t.deposit_mismatch2}${official.amount} ETB.`).catch(() => {})
       }
 
       const existing = await db('payments').where({ transaction_reference: parsedFromSMS.transactionId }).first()
       if (existing) {
-        return ctx.reply('❌ This Telebirr receipt has already been used.').catch(() => {})
+        return ctx.reply(t.deposit_used).catch(() => {})
       }
 
       const user = await db('users').where({ telegram_id: ctx.from.id }).first()
       if (!user) {
-        return ctx.reply('❌ User not found. Please open the Mini App first to register.').catch(() => {})
+        return ctx.reply(t.user_not_found).catch(() => {})
       }
 
       await db.transaction(async (trx) => {
@@ -193,7 +196,7 @@ bot.on('text', async (ctx) => {
         })
       })
 
-      ctx.reply(`✅ Receipt for ETB ${official.amount.toFixed(2)} verified and submitted for admin approval. Your wallet will be credited after approval.`).catch(() => {})
+      ctx.reply(`${t.deposit_success}${official.amount.toFixed(2)}${t.deposit_success2}`).catch(() => {})
       delete userStates[ctx.from.id]
       return
     }
@@ -201,14 +204,14 @@ bot.on('text', async (ctx) => {
     if (state === 'WAITING_FOR_WITHDRAW_AMOUNT') {
       const amount = Number(ctx.message.text)
       if (isNaN(amount) || amount < 100) {
-        return ctx.reply('❌ Invalid amount. Minimum withdrawal is 100 ETB.').catch(() => {})
+        return ctx.reply(t.withdraw_invalid).catch(() => {})
       }
 
       const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-      if (!user) return ctx.reply('❌ User not found.').catch(() => {})
+      if (!user) return ctx.reply(t.user_not_found).catch(() => {})
 
       if (Number(user.wallet_balance) < amount) {
-        return ctx.reply(`❌ Insufficient balance. You only have ETB ${Number(user.wallet_balance).toFixed(2)}.`).catch(() => {})
+        return ctx.reply(`${t.withdraw_insufficient}${Number(user.wallet_balance).toFixed(2)}.`).catch(() => {})
       }
 
       await db.transaction(async (trx) => {
@@ -226,16 +229,17 @@ bot.on('text', async (ctx) => {
         })
       })
 
-      ctx.reply(`⏳ Your withdrawal request for ETB ${amount.toFixed(2)} is pending admin approval.`).catch(() => {})
+      ctx.reply(`${t.withdraw_success}${amount.toFixed(2)}${t.withdraw_pending}`).catch(() => {})
       delete userStates[ctx.from.id]
     }
   } catch (err) {
     console.error('Text Handler Error:', err)
-    ctx.reply('❌ Failed to process your request. Please try again.').catch(() => {})
+    ctx.reply(t.err_general).catch(() => {})
   }
 })
 
 bot.on('contact', async (ctx) => {
+  const t = getT(await getUserLanguage(ctx.from.id))
   try {
     const contact = ctx.message.contact
     const telegramId = ctx.from.id
@@ -247,7 +251,7 @@ bot.on('contact', async (ctx) => {
 
     if (updated) {
       await ctx.reply(
-        `✅ Phone number saved: ${phoneNumber}\n\nYou can now use the bot normally.`,
+        `${t.phone_saved}${phoneNumber}${t.phone_saved_suffix}`,
         Markup.removeKeyboard()
       )
     } else {
@@ -258,13 +262,13 @@ bot.on('contact', async (ctx) => {
         wallet_balance: 0
       })
       await ctx.reply(
-        `✅ Registration complete! Phone number: ${phoneNumber}`,
+        `${t.reg_complete}${phoneNumber}`,
         Markup.removeKeyboard()
       )
     }
   } catch (err) {
     console.error('Contact save error:', err)
-    await ctx.reply('❌ Failed to save your contact. Please try again.')
+    await ctx.reply(t.contact_save_failed)
   }
 })
 

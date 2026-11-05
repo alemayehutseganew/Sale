@@ -72,7 +72,22 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-app.post('/api/bot/webhook', handleUpdate)
+app.post('/api/bot/webhook', (req, res) => {
+  const update = req.body || {}
+  const updateType = update.message
+    ? 'message'
+    : update.callback_query
+      ? 'callback_query'
+      : update.edited_message
+        ? 'edited_message'
+        : 'other'
+
+  console.log('[telegram-webhook] Received update', {
+    updateId: update.update_id,
+    updateType
+  })
+  handleUpdate(req, res)
+})
 
 // --- API routes ---
 app.use('/api/auth', authRoutes)

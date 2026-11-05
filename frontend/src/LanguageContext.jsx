@@ -6,7 +6,7 @@ const LanguageContext = createContext(null)
 export function LanguageProvider({ children }) {
   const [lang, setLang] = useState(() => {
     try {
-      return localStorage.getItem('lang') || 'en'
+      return localStorage.getItem('lang') === 'am' ? 'am' : 'en'
     } catch {
       return 'en'
     }

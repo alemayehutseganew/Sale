@@ -1,12 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fetchApi } from '../services/api';
+import { useTranslation } from 'react-i18next';
 
 export default function AdminPayments() {
+  const { t } = useTranslation();
+  const translationRef = useRef(t);
   const [transactions, setTransactions] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    translationRef.current = t;
+  }, [t]);
 
   useEffect(() => {
     let active = true;
@@ -18,7 +25,7 @@ export default function AdminPayments() {
         });
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(data.error || 'Failed to load payments');
+          throw new Error(data.error || translationRef.current('failedToLoadPayments'));
         }
         if (active) {
           setTransactions(data.transactions || []);
@@ -26,7 +33,7 @@ export default function AdminPayments() {
         }
       } catch (err) {
         console.error('Failed to load payments:', err);
-        if (active) setError(err.message || 'Failed to load payments');
+        if (active) setError(err.message || translationRef.current('failedToLoadPayments'));
       } finally {
         if (active) setLoading(false);
       }
@@ -48,7 +55,7 @@ export default function AdminPayments() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || `Failed to ${action} payment`);
+        throw new Error(data.error || t('failedAction', { action: t(action) }));
       }
       setTransactions((current) => current.map((payment) => (
         payment.id === tx.id
@@ -57,7 +64,7 @@ export default function AdminPayments() {
       )));
     } catch (err) {
       console.error(`Failed to ${action} payment:`, err);
-      setError(err.message || `Failed to ${action} payment`);
+      setError(err.message || t('failedAction', { action: t(action) }));
     } finally {
       setProcessingId(null);
     }
@@ -101,20 +108,20 @@ export default function AdminPayments() {
   };
 
   if (loading) {
-    return <div className="p-6 text-white">Loading payments...</div>;
+    return <div className="p-6 text-white">{t('loadingPayments')}</div>;
   }
 
   return (
     <div className="w-full min-w-0 p-4 lg:p-8">
       <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white sm:text-3xl">Payments &amp; Withdrawals</h1>
-          <p className="mt-1 text-sm text-slate-400">Review deposits and withdrawal requests.</p>
+          <h1 className="text-2xl font-bold text-white sm:text-3xl">{t('paymentsWithdrawals')}</h1>
+          <p className="mt-1 text-sm text-slate-400">{t('reviewPayments')}</p>
         </div>
         <input
           type="search"
-          aria-label="Search payments"
-          placeholder="Search user, type, status, or reference..."
+          aria-label={t('searchPayments')}
+          placeholder={t('searchPaymentsPlaceholder')}
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
           className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none sm:max-w-sm"
@@ -131,13 +138,13 @@ export default function AdminPayments() {
         <table className="w-full text-left text-sm text-slate-300">
           <thead className="bg-slate-900/70 text-xs uppercase text-slate-400">
             <tr>
-              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">User</th>
-              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Type</th>
-              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Amount</th>
-              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Reference</th>
-              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Status</th>
-              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Date</th>
-              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Actions</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('user')}</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('type')}</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('amount')}</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('reference')}</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('status')}</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('date')}</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('actions')}</th>
             </tr>
           </thead>
           <tbody>
@@ -149,14 +156,14 @@ export default function AdminPayments() {
               return (
                 <tr key={tx.id} className="border-b border-gray-700 hover:bg-gray-800 transition-colors">
                   <td className="max-w-48 break-words px-3 py-4 sm:px-5">
-                    <div className="font-semibold text-white">{tx.first_name || 'No Name'}</div>
+                    <div className="font-semibold text-white">{tx.first_name || t('noName')}</div>
                     <div className="text-xs text-slate-500">
                       {tx.username ? `@${tx.username}` : tx.telegram_id || '—'}
                     </div>
                   </td>
                   <td className="px-3 py-4 sm:px-5">
                     <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${getTypeStyles(type)}`}>
-                      {type || 'unknown'}
+                      {type === 'deposit' ? t('depositType') : type === 'withdrawal' ? t('withdrawalType') : type || t('unknownType')}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-4 font-mono font-semibold text-white sm:px-5">
@@ -167,7 +174,7 @@ export default function AdminPayments() {
                   </td>
                   <td className="px-3 py-4 sm:px-5">
                     <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${getStatusStyles(status)}`}>
-                      {status || 'unknown'}
+                      {status ? t(status) : t('unknownType')}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-4 text-slate-400 sm:px-5">
@@ -182,7 +189,7 @@ export default function AdminPayments() {
                           onClick={() => handlePaymentAction(tx, 'approve')}
                           className="rounded bg-green-600 px-3 py-1 text-sm text-white hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Approve
+                          {t('approve')}
                         </button>
                         <button
                           type="button"
@@ -190,12 +197,12 @@ export default function AdminPayments() {
                           onClick={() => handlePaymentAction(tx, 'reject')}
                           className="rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Reject
+                          {t('reject')}
                         </button>
                       </div>
                     ) : (
                       <span className="text-xs font-semibold uppercase text-slate-400">
-                        {status || 'Unknown'}
+                        {status ? t(status) : t('unknownType')}
                       </span>
                     )}
                   </td>
@@ -205,7 +212,7 @@ export default function AdminPayments() {
             {filteredTransactions.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
-                  {transactions.length === 0 ? 'No payments found.' : 'No payments match your search.'}
+                  {transactions.length === 0 ? t('noPaymentsFound') : t('noPaymentsMatch')}
                 </td>
               </tr>
             )}
