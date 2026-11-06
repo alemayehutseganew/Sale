@@ -509,7 +509,11 @@ function initGameHandler(io) {
     console.error('[Game] leave_room error:', err)
   }
 })
-    socket.on('claim_bingo', async ({ roomId, userId, cardId }) => {
+    socket.on('claim_bingo', async ({ roomId, userId, cardId, markedNumbers }) => {
+  if (!Array.isArray(markedNumbers) || markedNumbers.length === 0) {
+    return socket.emit('bingo_invalid', { message: 'You must mark numbers before claiming Bingo.' });
+  }
+
   const room = rooms[roomId];
   if (!room) return;
 
@@ -549,9 +553,9 @@ function initGameHandler(io) {
 
     const cardMatrix = typeof selection.card === 'string' ? JSON.parse(selection.card) : selection.card;
 
-    // 4. SECURITY FIX: Validate against SERVER called numbers, NOT the client's markedNumbers
-    const calledSet = new Set(Array.from(room.calledNumbers));
-    const result = validateBingo(cardMatrix, calledSet);
+    // Validate client marks against server calls, then check the card pattern using those marks.
+    const calledSet = new Set(Array.from(room.calledNumbers, Number));
+    const result = validateBingo(cardMatrix, calledSet, markedNumbers);
 
     if (!result.isValid) {
       console.log(`[Claim] Invalid Bingo for user ${userId}. Reason: Not a valid pattern.`);

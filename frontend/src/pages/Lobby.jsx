@@ -5,6 +5,7 @@ import { useLanguage } from '../LanguageContext'
 import { fetchApi } from '../services/api'
 import { useWallet } from '../WalletContext'
 import SocketService from '../services/socket'
+import ReferralPromo from '../components/ReferralPromo'
 
 const stakes = [10, 50, 100]
 
@@ -86,6 +87,10 @@ export default function Lobby() {
         <p className="text-gray-400 font-medium mt-2 tracking-widest uppercase text-xs">
           {t('playWinRepeat')}
         </p>
+      </div>
+
+      <div className="relative z-10 w-full max-w-md mx-auto px-4">
+        <ReferralPromo />
       </div>
 
       {/* Main Content */}

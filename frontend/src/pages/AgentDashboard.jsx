@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { fetchApi } from '../services/api'
+import ReferralPromo from '../components/ReferralPromo'
 
 const REFERRAL_THRESHOLD = 1000
 
@@ -101,6 +102,7 @@ export default function AgentDashboard() {
           ← {t('back')}
         </button>
         <h1 className="text-2xl font-bold mb-4">{t('agent_dashboard')}</h1>
+        <ReferralPromo />
 
         {loading ? (
           <p className="text-center text-gray-300 py-8">{t('loading')}</p>
