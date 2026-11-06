@@ -154,6 +154,22 @@ const PORT = process.env.PORT || 3001
 
 async function start() {
   console.log('⏳ Running database migrations...')
+  const connectionConfig = { ...db.client.config.connection }
+  if (connectionConfig.connectionString) {
+    connectionConfig.connectionString = '[REDACTED]'
+  }
+  if (connectionConfig.password) {
+    connectionConfig.password = '[REDACTED]'
+  }
+  console.log('=== DATABASE CONNECTION DEBUG ===')
+  console.log('NODE_ENV:', process.env.NODE_ENV)
+  console.log('DATABASE_URL loaded:', Boolean(process.env.DATABASE_URL))
+  console.log('Knex Config being used:', JSON.stringify({
+    client: db.client.config.client,
+    connection: connectionConfig
+  }, null, 2))
+  console.log('Knex Pool settings:', JSON.stringify(db.client.config.pool, null, 2))
+  console.log('=================================')
   try {
     await db.migrate.latest()
     console.log('✅ Database migrations completed successfully.')
