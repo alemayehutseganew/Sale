@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchApi } from '../services/api';
 import { useTranslation } from 'react-i18next';
 
@@ -15,36 +15,36 @@ export default function AdminPayments() {
     translationRef.current = t;
   }, [t]);
 
-  useEffect(() => {
-    let active = true;
-    const fetchPayments = async () => {
-      try {
-        const token = localStorage.getItem('adminToken');
-        const res = await fetchApi('/admin/payments', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || translationRef.current('failedToLoadPayments'));
-        }
-        if (active) {
-          setTransactions(data.transactions || []);
-          setError('');
-        }
-      } catch (err) {
-        console.error('Failed to load payments:', err);
-        if (active) setError(err.message || translationRef.current('failedToLoadPayments'));
-      } finally {
-        if (active) setLoading(false);
+  const fetchPayments = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoading(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetchApi('/admin/payments', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || translationRef.current('failedToLoadPayments'));
       }
-    };
-    fetchPayments();
-    return () => {
-      active = false;
-    };
+      setTransactions(data.transactions || []);
+      setError('');
+    } catch (err) {
+      console.error('Failed to load payments:', err);
+      setError(err.message || translationRef.current('failedToLoadPayments'));
+    } finally {
+      if (showLoading) setLoading(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchPayments(true);
+  }, [fetchPayments]);
+
   const handlePaymentAction = async (tx, action) => {
+    if (action === 'reject' && tx.type === 'withdrawal'
+      && !window.confirm('Reject this withdrawal? The funds will be refunded to the original balance.')) {
+      return;
+    }
     setProcessingId(tx.id);
     setError('');
     try {
@@ -57,11 +57,7 @@ export default function AdminPayments() {
       if (!res.ok) {
         throw new Error(data.error || t('failedAction', { action: t(action) }));
       }
-      setTransactions((current) => current.map((payment) => (
-        payment.id === tx.id
-          ? { ...payment, status: action === 'approve' ? 'completed' : 'rejected' }
-          : payment
-      )));
+      await fetchPayments();
     } catch (err) {
       console.error(`Failed to ${action} payment:`, err);
       setError(err.message || t('failedAction', { action: t(action) }));
@@ -99,6 +95,7 @@ export default function AdminPayments() {
       case 'pending':
         return 'bg-yellow-900/50 text-yellow-300';
       case 'completed':
+      case 'approved':
         return 'bg-green-900/50 text-green-300';
       case 'rejected':
         return 'bg-red-900/50 text-red-300';
@@ -140,6 +137,7 @@ export default function AdminPayments() {
             <tr>
               <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('user')}</th>
               <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('type')}</th>
+              <th scope="col" className="px-3 py-4 font-semibold sm:px-5">Source</th>
               <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('amount')}</th>
               <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('reference')}</th>
               <th scope="col" className="px-3 py-4 font-semibold sm:px-5">{t('status')}</th>
@@ -166,6 +164,11 @@ export default function AdminPayments() {
                       {type === 'deposit' ? t('depositType') : type === 'withdrawal' ? t('withdrawalType') : type || t('unknownType')}
                     </span>
                   </td>
+                  <td className="px-3 py-4 sm:px-5">
+                    {type === 'withdrawal'
+                      ? tx.source === 'referral' ? 'Agent' : 'Playable'
+                      : '—'}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-4 font-mono font-semibold text-white sm:px-5">
                     {Number(tx.amount || 0).toFixed(2)} ETB
                   </td>
@@ -174,7 +177,7 @@ export default function AdminPayments() {
                   </td>
                   <td className="px-3 py-4 sm:px-5">
                     <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold capitalize ${getStatusStyles(status)}`}>
-                      {status ? t(status) : t('unknownType')}
+                      {status === 'approved' ? 'Approved' : status ? t(status) : t('unknownType')}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-4 text-slate-400 sm:px-5">
@@ -211,7 +214,7 @@ export default function AdminPayments() {
             })}
             {filteredTransactions.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-slate-400">
+                <td colSpan={8} className="px-5 py-10 text-center text-slate-400">
                   {transactions.length === 0 ? t('noPaymentsFound') : t('noPaymentsMatch')}
                 </td>
               </tr>

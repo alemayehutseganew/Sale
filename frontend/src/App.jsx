@@ -7,6 +7,7 @@ import Wallet from './pages/Wallet'
 import Settings from './pages/Settings'
 import GameHistory from './pages/GameHistory'
 import Leaderboard from './pages/Leaderboard'
+import AgentDashboard from './pages/AgentDashboard'
 import { LanguageProvider } from './LanguageContext'
 import { WalletProvider } from './WalletContext'
 import SocketService from './services/socket'
@@ -28,10 +29,12 @@ export default function App() {
     const initData = tg?.initData || ''
     if (!initData) return
 
+    const referralRef = new URLSearchParams(window.location.search).get('ref')
+      || tg?.initDataUnsafe?.start_param
     fetchApi('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData }),
+      body: JSON.stringify({ initData, ...(referralRef ? { referralRef } : {}) }),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -60,6 +63,7 @@ export default function App() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/history" element={<GameHistory />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/agent" element={<AgentDashboard />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
               path="/admin"

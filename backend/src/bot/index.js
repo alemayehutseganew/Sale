@@ -37,6 +37,27 @@ function getMainMenu(lang = 'en') {
 }
 
 bot.start((ctx) => {
+  const payload = ctx.startPayload
+  if (payload) {
+    let webAppUrl = FRONTEND_URL
+    try {
+      const parsedUrl = new URL(FRONTEND_URL)
+      parsedUrl.searchParams.set('ref', payload)
+      webAppUrl = parsedUrl.toString()
+    } catch (err) {
+      console.error('[BOT] Invalid FRONTEND_URL for referral link:', err.message)
+      return ctx.reply('The game link is temporarily unavailable.')
+    }
+
+    return ctx.reply('Welcome to YogaBingo! 🎰', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🎮 Open Game', web_app: { url: webAppUrl } }],
+        ],
+      },
+    }).catch((err) => console.error('Start error:', err.message))
+  }
+
   ctx.reply(getT('en').choose_lang, {
     reply_markup: {
       inline_keyboard: [
@@ -44,6 +65,31 @@ bot.start((ctx) => {
       ]
     }
   }).catch((err) => console.error('Start error:', err.message))
+})
+
+bot.on('inline_query', async (ctx) => {
+  const query = ctx.inlineQuery.query.trim()
+  const referral = query.startsWith('start=') ? query.slice('start='.length) : query
+  if (!referral) {
+    return ctx.answerInlineQuery([])
+  }
+
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME || process.env.VITE_BOT_USERNAME || 'YogaBingoBot'
+  const referralUrl = `https://t.me/${botUsername.replace(/^@/, '')}?start=${encodeURIComponent(referral)}`
+  await ctx.answerInlineQuery([{
+    type: 'article',
+    id: 'yogabingo-referral',
+    title: 'Play YogaBingo!',
+    description: 'Tap to join the game and win big!',
+    input_message_content: {
+      message_text: `🎰 Join me on YogaBingo and win big!\n${referralUrl}`,
+    },
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🎮 Play Now', url: referralUrl }],
+      ],
+    },
+  }])
 })
 
 bot.action('lang_en', async (ctx) => {

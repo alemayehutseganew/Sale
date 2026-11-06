@@ -267,6 +267,11 @@ async function startCountdown(io, roomId) {
           } while (room.calledNumbers.has(number))
 
           room.calledNumbers.add(number)
+          const calledNumbers = Array.from(room.calledNumbers)
+          db('game_rooms')
+            .where({ id: roomId })
+            .update({ called_numbers: JSON.stringify(calledNumbers) })
+            .catch((err) => console.error('[DRAW DB SAVE ERROR]', err))
 
           let letter = 'B'
           if (number > 15) letter = 'I'
@@ -373,11 +378,24 @@ function initGameHandler(io) {
         // Reconnecting during an active round never restores player status.
         if (['PLAYING', 'CLAIMING', 'COUNTDOWN'].includes(persistedRoom.status)) {
           const room = rooms[roomId]
+          let persistedCalledNumbers = persistedRoom.called_numbers || []
+          if (typeof persistedCalledNumbers === 'string') {
+            persistedCalledNumbers = JSON.parse(persistedCalledNumbers)
+          }
+          if (!Array.isArray(persistedCalledNumbers)) persistedCalledNumbers = []
+          room.calledNumbers = new Set([
+            ...persistedCalledNumbers.map(Number).filter(Number.isFinite),
+            ...room.calledNumbers,
+          ])
+          const calledNumbers = Array.from(room.calledNumbers)
+          room.latestNumber = calledNumbers.length
+            ? getBallData(calledNumbers[calledNumbers.length - 1])
+            : null
           const playerCount = await emitCurrentRoomState(socket, roomId, room)
           socket.emit('game_in_progress', {
             message: 'A game is in progress. Please wait for the next round.',
-            currentBall: room.latestNumber || null,
-            calledNumbers: Array.from(room.calledNumbers),
+            currentBall: room.latestNumber,
+            calledNumbers,
             players: playerCount,
             status: room.status
           })
@@ -574,10 +592,14 @@ function initGameHandler(io) {
         const platformFee = totalPool * 0.15;
         const netWinnerPool = totalPool - platformFee;
         const payoutPerWinner = Math.floor((netWinnerPool / winnerCount) * 100) / 100;
+        const referralPool = Math.floor((totalPool * 0.05) * 100) / 100;
+        // Keep total commissions within 5% of the pot when winners tie.
+        const referralCommissionPerWinner = Math.floor((referralPool / winnerCount) * 100) / 100;
 
         console.log(`[PAYOUT] Pool: ${totalPool}, Fee: ${platformFee}, Payout: ${payoutPerWinner}`);
 
         // Process payouts in DB
+        const inviterUpdates = new Map();
         await db.transaction(async (trx) => {
           for (const winnerId of room.claimedBy) {
             let winnerUser = await trx('users').where({ id: winnerId }).first();
@@ -595,9 +617,47 @@ function initGameHandler(io) {
               type: 'WINNING_PAYOUT'
             });
             console.log(`[PAYOUT] Credited ${payoutPerWinner} to winner ${winnerUser.id}`);
+
+            if (winnerUser.referred_by && referralCommissionPerWinner > 0) {
+              const inviter = await trx('users').where({ id: winnerUser.referred_by }).first();
+              if (inviter) {
+                await trx('users')
+                  .where({ id: inviter.id })
+                  .increment('referral_balance', referralCommissionPerWinner);
+                await trx('referral_earnings').insert({
+                  inviter_id: inviter.id,
+                  invitee_id: winnerUser.id,
+                  room_id: roomId,
+                  amount: referralCommissionPerWinner,
+                });
+                await trx('financial_ledger').insert({
+                  user_id: inviter.id,
+                  amount: referralCommissionPerWinner,
+                  type: 'referral_commission',
+                  reference: `Locked referral commission for room ${roomId}`,
+                });
+                inviterUpdates.set(inviter.id, inviter);
+              }
+            }
+          }
+
+          for (const [inviterId, inviter] of inviterUpdates) {
+            const updatedInviter = await trx('users').where({ id: inviterId }).first();
+            inviterUpdates.set(inviterId, updatedInviter);
           }
           await trx('game_rooms').where({ id: roomId }).update({ status: 'ENDED' });
         });
+
+        for (const [inviterId, inviter] of inviterUpdates) {
+          try {
+            io.to(`user_${inviterId}`).emit('wallet_updated', {
+              newBalance: Number(inviter.wallet_balance || 0),
+              referralBalance: Number(inviter.referral_balance || 0),
+            });
+          } catch (emitErr) {
+            console.error(`[PAYOUT] Failed to notify inviter ${inviterId}:`, emitErr);
+          }
+        }
 
         // Emit game over to everyone
         room.status = 'ENDED';

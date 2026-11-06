@@ -36,7 +36,7 @@ function validateInitData(initData, botToken) {
 
 router.post('/login', async (req, res) => {
   try {
-    const { initData } = req.body || {}
+    const { initData, referralRef, referralCode } = req.body || {}
     if (!initData) {
       return res.status(400).json({ error: 'initData is required' })
     }
@@ -56,12 +56,33 @@ router.post('/login', async (req, res) => {
     let user = await db('users').where({ telegram_id: telegramId }).first()
 
     if (!user) {
+      const referral = typeof referralRef === 'string'
+        ? referralRef.trim()
+        : typeof referralCode === 'string'
+          ? referralCode.trim()
+          : ''
+      let inviter = null
+      if (referral.startsWith('@')) {
+        inviter = await db('users')
+          .whereRaw('LOWER(username) = LOWER(?)', [referral.slice(1)])
+          .first()
+      } else if (/^\d+$/.test(referral)) {
+        inviter = await db('users').where({ telegram_id: referral }).first()
+      } else if (referral) {
+        inviter = await db('users').where({ referral_code: referral.toUpperCase() }).first()
+      }
+
+      let ownReferralCode = tgUser.username ? `@${tgUser.username}` : String(telegramId)
+      const codeInUse = await db('users').where({ referral_code: ownReferralCode }).first('id')
+      if (codeInUse) ownReferralCode = String(telegramId)
       const [created] = await db('users')
         .insert({
           telegram_id: telegramId,
           username: tgUser.username || null,
           first_name: tgUser.first_name || null,
           wallet_balance: 0,
+          referral_code: ownReferralCode,
+          referred_by: inviter ? inviter.id : null,
         })
         .returning('*')
       user = created

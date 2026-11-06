@@ -9,6 +9,11 @@ export function WalletProvider({ children }) {
     const storedBalance = Number(localStorage.getItem('walletBalance'))
     return Number.isFinite(storedBalance) ? storedBalance : 0
   })
+  const [referralBalance, setReferralBalance] = useState(() => {
+    const storedBalance = Number(localStorage.getItem('referralBalance'))
+    return Number.isFinite(storedBalance) ? storedBalance : 0
+  })
+  const [referralThreshold, setReferralThreshold] = useState(1000)
   const [loading, setLoading] = useState(true)
 
   const refreshBalance = useCallback(async () => {
@@ -32,6 +37,16 @@ export function WalletProvider({ children }) {
 
       setBalance(nextBalance)
       localStorage.setItem('walletBalance', String(nextBalance))
+
+      const nextReferralBalance = Number(data.referral_balance ?? 0)
+      const nextReferralThreshold = Number(data.referral_threshold ?? 1000)
+      if (!Number.isFinite(nextReferralBalance) || !Number.isFinite(nextReferralThreshold) || nextReferralThreshold <= 0) {
+        throw new Error('Referral balance response was invalid.')
+      }
+
+      setReferralBalance(nextReferralBalance)
+      setReferralThreshold(nextReferralThreshold)
+      localStorage.setItem('referralBalance', String(nextReferralBalance))
     } finally {
       setLoading(false)
     }
@@ -39,15 +54,32 @@ export function WalletProvider({ children }) {
 
   useEffect(() => {
     const socket = SocketService.connect()
-    const updateBalance = ({ newBalance } = {}) => {
-      const nextBalance = Number(newBalance)
-      if (!Number.isFinite(nextBalance)) {
-        console.error('Received invalid wallet balance update.')
-        return
+    const updateBalance = ({ newBalance, referralBalance: nextReferralBalance } = {}) => {
+      if (newBalance !== undefined) {
+        const nextBalance = Number(newBalance)
+        if (!Number.isFinite(nextBalance)) {
+          console.error('Received invalid wallet balance update.')
+          return
+        }
+
+        setBalance(nextBalance)
+        localStorage.setItem('walletBalance', String(nextBalance))
       }
 
-      setBalance(nextBalance)
-      localStorage.setItem('walletBalance', String(nextBalance))
+      if (nextReferralBalance !== undefined) {
+        const nextBalance = Number(nextReferralBalance)
+        if (!Number.isFinite(nextBalance)) {
+          console.error('Received invalid referral balance update.')
+          return
+        }
+
+        setReferralBalance(nextBalance)
+        localStorage.setItem('referralBalance', String(nextBalance))
+      }
+
+      if (newBalance === undefined && nextReferralBalance === undefined) {
+        console.error('Received wallet update without a balance.')
+      }
     }
     const refresh = () => {
       refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
@@ -66,7 +98,7 @@ export function WalletProvider({ children }) {
   }, [refreshBalance])
 
   return (
-    <WalletContext.Provider value={{ balance, loading, refreshBalance }}>
+    <WalletContext.Provider value={{ balance, referralBalance, referralThreshold, loading, refreshBalance }}>
       {children}
     </WalletContext.Provider>
   )
