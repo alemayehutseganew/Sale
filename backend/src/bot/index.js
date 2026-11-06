@@ -5,6 +5,8 @@ const { getT } = require('./translations')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://ked-seven.vercel.app'
 const userStates = {}
+let commandRegistrationPromise
+let botInfoPromise
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN)
 
@@ -28,6 +30,7 @@ function getMainMenu(lang = 'en') {
     reply_markup: {
       inline_keyboard: [
         [{ text: t.play_btn, web_app: { url: FRONTEND_URL } }],
+        [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
         [{ text: t.btn_balance, callback_data: 'menu_balance' }, { text: t.btn_deposit, callback_data: 'menu_deposit' }],
         [{ text: t.btn_withdraw, callback_data: 'menu_withdraw' }, { text: t.btn_room, callback_data: 'menu_room' }],
         [{ text: t.btn_help, callback_data: 'menu_help' }]
@@ -36,13 +39,86 @@ function getMainMenu(lang = 'en') {
   }
 }
 
-bot.start((ctx) => {
+async function registerBotCommands() {
+  if (!commandRegistrationPromise) {
+    commandRegistrationPromise = bot.telegram.setMyCommands([
+      { command: 'start', description: 'Start the bot and open the game' },
+      { command: 'balance', description: 'Check your wallet balance' },
+      { command: 'invite', description: 'Get your referral link to earn 5%' },
+      { command: 'deposit', description: 'Deposit ETB to play' },
+      { command: 'withdraw', description: 'Withdraw your winnings' },
+      { command: 'menu', description: 'Open the game menu' },
+      { command: 'play', description: 'Play the game' },
+      { command: 'help', description: 'How to play the game' },
+      { command: 'register', description: 'Register your phone number' }
+    ]).catch((err) => {
+      commandRegistrationPromise = null
+      console.error('[BOT] Failed to register bot commands:', err)
+      throw err
+    })
+  }
+  return commandRegistrationPromise
+}
+
+registerBotCommands().catch((err) => {
+  console.error('[BOT] Command menu initialization failed:', err)
+})
+
+async function sendInvite(ctx) {
+  try {
+    const user = await db('users').where({ telegram_id: ctx.from.id }).first()
+    if (!user) return ctx.reply('Please open the Mini App first to register.')
+
+    const refId = user.username || user.telegram_id
+    const botUsername = ctx.botInfo?.username || await getBotUsername()
+    const refLink = `https://t.me/${botUsername}?start=REF_${encodeURIComponent(String(refId))}`
+    const shareText = 'Join me on YogaBingo and win big! 🎰'
+    const message = `🎉 *Invite & Earn 5%!*\n\nShare your unique link with friends. When they win a game, you get 5% of their prize!\n\n🔗 Your Link:\n\`${refLink}\`\n\n*(You can withdraw your earnings once you reach 1,000 ETB!)*`
+
+    return ctx.replyWithMarkdown(message, {
+      reply_markup: {
+        inline_keyboard: [
+          [{
+            text: '📢 Share to Group/Channel',
+            url: `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`,
+          }],
+          [{
+            text: '🎮 Open Game',
+            web_app: { url: FRONTEND_URL },
+          }],
+        ],
+      },
+    })
+  } catch (err) {
+    console.error('Invite command error:', err)
+    return ctx.reply('❌ Could not generate your invite link. Please try again later.')
+  }
+}
+
+async function getBotUsername() {
+  if (!botInfoPromise) {
+    botInfoPromise = bot.telegram.getMe().catch((err) => {
+      botInfoPromise = null
+      throw err
+    })
+  }
+  return (await botInfoPromise).username
+}
+
+bot.start(async (ctx) => {
+  try {
+    await registerBotCommands()
+  } catch {
+    // Keep /start available even if Telegram command-menu registration fails.
+  }
+
   const payload = ctx.startPayload
   if (payload) {
     let webAppUrl = FRONTEND_URL
     try {
       const parsedUrl = new URL(FRONTEND_URL)
-      parsedUrl.searchParams.set('ref', payload)
+      const referral = payload.startsWith('REF_') ? payload.slice(4) : payload
+      parsedUrl.searchParams.set('ref', /^\d+$/.test(referral) ? referral : `@${referral}`)
       webAppUrl = parsedUrl.toString()
     } catch (err) {
       console.error('[BOT] Invalid FRONTEND_URL for referral link:', err.message)
@@ -53,6 +129,7 @@ bot.start((ctx) => {
       reply_markup: {
         inline_keyboard: [
           [{ text: '🎮 Open Game', web_app: { url: webAppUrl } }],
+          [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
         ],
       },
     }).catch((err) => console.error('Start error:', err.message))
@@ -61,10 +138,17 @@ bot.start((ctx) => {
   ctx.reply(getT('en').choose_lang, {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🇬🇧 English', callback_data: 'lang_en' }, { text: '🇪🇹 አማርኛ', callback_data: 'lang_am' }]
+        [{ text: '🇬🇧 English', callback_data: 'lang_en' }, { text: '🇪🇹 አማርኛ', callback_data: 'lang_am' }],
+        [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
       ]
     }
   }).catch((err) => console.error('Start error:', err.message))
+})
+
+bot.command(['invite', 'refer'], sendInvite)
+bot.action('show_invite', async (ctx) => {
+  await ctx.answerCbQuery().catch((err) => console.error('Invite callback error:', err))
+  await sendInvite(ctx)
 })
 
 bot.on('inline_query', async (ctx) => {

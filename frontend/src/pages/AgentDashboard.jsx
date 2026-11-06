@@ -18,7 +18,7 @@ export default function AgentDashboard() {
   const referralLink = useMemo(() => {
     if (!telegramUser) return ''
     const botUsername = (import.meta.env.VITE_BOT_USERNAME || 'YogaBingoBot').replace(/^@/, '')
-    const referralRef = telegramUser.username ? `@${telegramUser.username}` : String(telegramUser.telegram_id)
+    const referralRef = String(telegramUser.telegram_id)
     return `https://t.me/${botUsername}?start=${encodeURIComponent(referralRef)}`
   }, [telegramUser])
 
@@ -81,7 +81,7 @@ export default function AgentDashboard() {
   const shareToGroup = async () => {
     const telegram = window.Telegram?.WebApp
     if (telegram && typeof telegram.switchInlineQuery === 'function') {
-      const referralRef = telegramUser.username ? `@${telegramUser.username}` : String(telegramUser.telegram_id)
+      const referralRef = String(telegramUser.telegram_id)
       telegram.switchInlineQuery(`start=${referralRef}`, ['groups', 'channels', 'users'])
       return
     }
