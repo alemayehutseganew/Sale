@@ -85,7 +85,7 @@ bot.command('balance', async (ctx) => {
     if (user) ctx.reply(`${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`)
     else ctx.reply(t.user_not_found)
   } catch (err) {
-    console.error('Failed to fetch balance:', err.message)
+    console.error('[BOT ERROR] Failed to fetch balance for user:', ctx.from.id, err)
     ctx.reply(t.err_balance).catch(() => {})
   }
 })
