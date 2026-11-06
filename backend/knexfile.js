@@ -6,10 +6,10 @@ function buildConfig() {
   const base = {
     migrations: { directory: './migrations' },
     pool: {
-      min: 2,
-      max: 10,
+      min: 0,
+      max: 1,
       acquireTimeoutMillis: 60000,
-      idleTimeoutMillis: 30000,
+      idleTimeoutMillis: 10000,
     },
   }
   const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL)
@@ -20,7 +20,7 @@ function buildConfig() {
       client: 'pg',
       connection: {
         connectionString: databaseUrl,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       },
     }
   }
