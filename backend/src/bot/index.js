@@ -73,19 +73,20 @@ async function sendInvite(ctx) {
     const botUsername = ctx.botInfo?.username || await getBotUsername()
     const refLink = `https://t.me/${botUsername}?start=REF_${encodeURIComponent(String(refId))}`
     const shareText = 'Join me on YogaBingo and win big! 🎰'
-    const message = `🎉 *Invite & Earn 5%!*\n\nShare your unique link with friends. When they win a game, you get 5% of their prize!\n\n🔗 Your Link:\n\`${refLink}\`\n\n*(You can withdraw your earnings once you reach 1,000 ETB!)*`
+    const message = `🎉 Invite & Earn 5%!\n\nShare your unique link with friends. When they win a game, you get 5% of their prize!\n\n🔗 Your Link:\n${refLink}\n\nYou can withdraw your earnings once you reach 1,000 ETB!`
+    const openGameButton = ctx.chat?.type === 'private'
+      ? { text: '🎮 Open Game', web_app: { url: FRONTEND_URL } }
+      : { text: '🎮 Open Game', url: FRONTEND_URL }
 
-    return ctx.replyWithMarkdown(message, {
+    return ctx.reply(message, {
+      disable_web_page_preview: true,
       reply_markup: {
         inline_keyboard: [
           [{
             text: '📢 Share to Group/Channel',
             url: `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`,
           }],
-          [{
-            text: '🎮 Open Game',
-            web_app: { url: FRONTEND_URL },
-          }],
+          [openGameButton],
         ],
       },
     })
