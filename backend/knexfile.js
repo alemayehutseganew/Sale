@@ -2,13 +2,14 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env'), quiet: true });
 const normalizeDatabaseUrl = require('./src/dbUrl')
 
-function buildConfig() {
+function buildConfig(isProduction = false) {
   const base = {
     migrations: { directory: './migrations' },
     pool: {
       min: 0,
       max: 1,
       acquireTimeoutMillis: 60000,
+      ...(isProduction ? { createTimeoutMillis: 30000 } : {}),
       idleTimeoutMillis: 10000,
     },
   }
@@ -20,7 +21,7 @@ function buildConfig() {
       client: 'pg',
       connection: {
         connectionString: databaseUrl,
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        ssl: isProduction ? { rejectUnauthorized: false } : false,
       },
     }
   }
@@ -37,9 +38,7 @@ function buildConfig() {
   }
 }
 
-const config = buildConfig()
-
 module.exports = {
-  development: config,
-  production: config,
+  development: buildConfig(),
+  production: buildConfig(true),
 }
