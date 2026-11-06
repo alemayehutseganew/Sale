@@ -69,7 +69,8 @@ router.post('/login', async (req, res) => {
     const token = jwt.sign({ id: admin.id, username: admin.username }, JWT_SECRET, { expiresIn: '24h' })
     res.json({ token })
   } catch (err) {
-    res.status(500).json({ error: err.message })
+    console.error('[ADMIN LOGIN ERROR]:', err)
+    res.status(500).json({ error: 'Internal server error during login. Check backend logs.' })
   }
 })
 

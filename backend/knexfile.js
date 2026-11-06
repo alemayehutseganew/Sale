@@ -40,5 +40,21 @@ function buildConfig(isProduction = false) {
 
 module.exports = {
   development: buildConfig(),
-  production: buildConfig(true),
+  production: {
+    client: 'pg',
+    connection: {
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false } // Required for Enzonic SSL
+    },
+    pool: {
+      min: 0, // CRITICAL: Do not keep idle connections
+      max: 1, // CRITICAL: Only 1 connection per serverless instance
+      acquireTimeoutMillis: 60000,
+      createTimeoutMillis: 30000,
+      idleTimeoutMillis: 10000
+    },
+    migrations: {
+      directory: './migrations'
+    }
+  }
 }
