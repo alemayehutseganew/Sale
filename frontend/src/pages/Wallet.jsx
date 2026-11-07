@@ -161,10 +161,10 @@ export default function Wallet() {
         <div className="bg-[#1e3a5f] border-2 border-yellow-500 rounded-xl p-4 mb-4">
           <p className="text-sm text-gray-300 mb-2">{t('sendDepositToTelebirr')}</p>
           <div className="flex items-center justify-between bg-[#112A46] rounded-lg p-3">
-            <span className="text-2xl font-black text-yellow-400 tracking-wider">0930702649</span>
+            <span className="text-2xl font-black text-yellow-400 tracking-wider">0991179163</span>
             <button
               onClick={() => {
-                navigator.clipboard.writeText('0930702649');
+                navigator.clipboard.writeText('0991179163');
                 alert(t('numberCopied'));
               }}
               className="bg-yellow-500 text-[#112A46] px-3 py-1 rounded text-sm font-bold"
@@ -172,7 +172,7 @@ export default function Wallet() {
               {t('copy')}
             </button>
           </div>
-          <p className="text-xs text-gray-400 mt-2">{t('accountName')} <strong>Kedir Shifaw kebede</strong></p>
+          <p className="text-xs text-gray-400 mt-2">{t('accountName')} <strong>Saleamlak misganaw dagnaw</strong></p>
           <p className="text-xs text-gray-400">{t('afterSending')}</p>
         </div>
         <div className="mb-3">
