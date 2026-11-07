@@ -408,7 +408,7 @@ const GameScreen = () => {
 
     return (
       <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#0f172a] text-white">
-        <div className="flex-1 overflow-y-auto p-4 pb-44">
+        <div className="flex-1 overflow-y-auto p-4 pb-32">
           <div className="mx-auto max-w-4xl">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h1 className="text-xl font-bold sm:text-2xl">{t('selectCard', { stake })}</h1>
@@ -448,17 +448,17 @@ const GameScreen = () => {
           </div>
         </div>
 
-        <div className="fixed inset-x-0 bottom-0 z-30 flex gap-3 border-t border-gray-700 bg-[#0f172a] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:p-4">
-          <div className="flex min-h-32 flex-1 flex-col justify-center rounded-xl bg-white p-2 text-gray-900">
-            <div className="mb-1 text-center text-xs font-bold">
+        <div className="fixed inset-x-0 bottom-0 z-30 flex h-28 gap-2 border-t border-gray-700 bg-[#0f172a] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-3">
+          <div className="flex min-h-0 flex-1 flex-col justify-center rounded-xl bg-white p-1.5 text-gray-900">
+            <div className="mb-0.5 text-center text-[10px] font-bold">
               {selectedCard ? `Card ${selectedCard.id || selectedCard.cardId}` : t('loadingCard')}
             </div>
             {selectedCard?.matrix ? (
-              <div className="grid grid-cols-5 gap-0.5">
+              <div className="grid grid-cols-5 gap-px">
                 {selectedCard.matrix.flat().map((number, index) => (
                   <span
                     key={index}
-                    className={`flex aspect-square items-center justify-center rounded text-[9px] font-bold sm:text-xs ${
+                    className={`flex h-3.5 items-center justify-center rounded text-[8px] font-bold sm:h-4 sm:text-[10px] ${
                       index === 12 ? 'bg-blue-600 text-white' : 'bg-gray-100'
                     }`}
                   >
@@ -471,22 +471,24 @@ const GameScreen = () => {
             )}
           </div>
 
-          <div className="flex min-h-32 flex-1 flex-col items-center justify-center rounded-xl bg-blue-900/50 p-2 text-center">
-            {countdown !== null ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl bg-blue-900/50 p-1.5 text-center">
+            {playersCount < 2 ? (
               <>
-                <p className="mb-1 text-xs text-blue-100">{t('gameStartsIn')}</p>
-                <span className="font-mono text-3xl font-black text-white sm:text-4xl">{formatTime(countdown)}</span>
-                <p className="mt-1 text-xs text-blue-100">
+                <p className="text-xs font-semibold text-blue-100">{t('waitingForPlayers')}</p>
+                <span aria-hidden="true" className="mt-1 animate-pulse text-xs text-blue-200">•••</span>
+              </>
+            ) : countdown !== null ? (
+              <>
+                <p className="mb-0.5 text-[10px] text-blue-100">{t('gameStartsIn')}</p>
+                <span className="font-mono text-2xl font-black text-white sm:text-3xl">{formatTime(countdown)}</span>
+                <p className="mt-0.5 text-[10px] text-blue-100">
                   {cardChangeLocked ? t('waitingForGame') : t('getReady')}
                 </p>
               </>
             ) : (
-              <>
-                <p className="font-mono text-3xl font-black text-white sm:text-4xl">--:--</p>
-                <p className="mt-1 text-xs text-blue-100">{t('waitingForPlayers')}</p>
-              </>
+              <p className="text-xs font-semibold text-blue-100">{t('getReady')}</p>
             )}
-            {cardChangeLoading && <span className="mt-1 text-xs text-blue-100">{t('loadingCard')}</span>}
+            {cardChangeLoading && <span className="mt-0.5 text-[10px] text-blue-100">{t('loadingCard')}</span>}
           </div>
         </div>
       </div>
@@ -516,7 +518,7 @@ const GameScreen = () => {
           </button>
         </div>
       </div>
-      {countdown !== null && (
+      {playersCount >= 2 && countdown !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
           <div className="w-full max-w-md animate-pulse rounded-3xl border border-white/15 bg-gradient-to-br from-indigo-900 to-blue-900 px-6 py-10 text-center shadow-2xl sm:px-12">
             <p className="mb-4 text-lg font-semibold text-blue-100 sm:text-xl">{t('gameStartsIn')}</p>

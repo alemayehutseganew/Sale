@@ -94,7 +94,7 @@ export default function CardSelection() {
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#0f172a] text-white">
-      <div className="flex-1 overflow-y-auto p-4 pb-44">
+      <div className="flex-1 overflow-y-auto p-4 pb-32">
         <div className="mx-auto max-w-4xl">
           <div className="mb-4 flex items-center justify-between gap-3">
             <button
@@ -144,17 +144,17 @@ export default function CardSelection() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 flex gap-3 border-t border-gray-700 bg-[#0f172a] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:p-4">
-        <div className="flex min-h-32 flex-1 flex-col justify-center rounded-xl bg-white p-2 text-gray-900">
-          <div className="mb-1 text-center text-xs font-bold">
+      <div className="fixed inset-x-0 bottom-0 z-30 flex h-28 gap-2 border-t border-gray-700 bg-[#0f172a] p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:gap-3">
+        <div className="flex min-h-0 flex-1 flex-col justify-center rounded-xl bg-white p-1.5 text-gray-900">
+          <div className="mb-0.5 text-center text-[10px] font-bold">
             {selectedCard ? `Card ${selectedCard}` : 'Card preview'}
           </div>
           {previewMatrix ? (
-            <div className="grid grid-cols-5 gap-0.5">
+            <div className="grid grid-cols-5 gap-px">
               {previewMatrix.flat().map((number, index) => (
                 <span
                   key={index}
-                  className={`flex aspect-square items-center justify-center rounded text-[9px] font-bold sm:text-xs ${
+                  className={`flex h-3.5 items-center justify-center rounded text-[8px] font-bold sm:h-4 sm:text-[10px] ${
                     index === 12 ? 'bg-blue-600 text-white' : 'bg-gray-100'
                   }`}
                 >
@@ -167,13 +167,13 @@ export default function CardSelection() {
           )}
         </div>
 
-        <div className="flex min-h-32 flex-1 flex-col items-center justify-center rounded-xl bg-blue-900/50 p-2 text-center">
-          <p className="mb-2 text-xs text-blue-100">Confirm your card</p>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl bg-blue-900/50 p-1.5 text-center">
+          <p className="mb-1 text-[10px] text-blue-100">Confirm your card</p>
           <button
             type="button"
             disabled={!selectedCard || takenCards.includes(selectedCard) || loading}
             onClick={handleCardSelect}
-            className="w-full rounded-lg bg-blue-500 px-2 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
+            className="w-full rounded-lg bg-blue-500 px-2 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
           >
             {loading ? t('loadingCard') : 'Join game'}
           </button>
