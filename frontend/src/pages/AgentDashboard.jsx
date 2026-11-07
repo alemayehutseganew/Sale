@@ -17,7 +17,7 @@ export default function AgentDashboard() {
 
   const referralLink = useMemo(() => {
     if (!telegramUser) return ''
-    const botUsername = (import.meta.env.VITE_BOT_USERNAME || 'YogaBingoBot').replace(/^@/, '')
+    const botUsername = (import.meta.env.VITE_BOT_USERNAME || 'GoBingoBot').replace(/^@/, '')
     const referralRef = String(telegramUser.telegram_id)
     return `https://t.me/${botUsername}?start=${encodeURIComponent(referralRef)}`
   }, [telegramUser])

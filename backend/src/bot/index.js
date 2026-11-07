@@ -74,7 +74,7 @@ async function sendInvite(ctx) {
     const refId = user.username || user.telegram_id
     const botUsername = ctx.botInfo?.username || await getBotUsername()
     const refLink = `https://t.me/${botUsername}?start=REF_${encodeURIComponent(String(refId))}`
-    const shareText = 'Join me on YogaBingo and win big! 🎰'
+    const shareText = 'Join me on GoBingo and win big! 🎰'
     const message = `🎉 Invite & Earn 5%!\n\nShare your unique link with friends. When they win a game, you get 5% of their prize!\n\n🔗 Your Link:\n${refLink}\n\nYou can withdraw your earnings once you reach 1,000 ETB!`
     const openGameButton = ctx.chat?.type === 'private'
       ? { text: '🎮 Open Game', web_app: { url: FRONTEND_URL } }
@@ -130,7 +130,7 @@ bot.start(async (ctx) => {
         return ctx.reply('The game link is temporarily unavailable.')
       }
 
-      return ctx.reply('Welcome to YogaBingo! 🎰', {
+      return ctx.reply('Welcome to GoBingo! 🎰', {
         reply_markup: {
           inline_keyboard: [
             [{ text: '🎮 Open Game', web_app: { url: webAppUrl } }],
@@ -166,15 +166,15 @@ bot.on('inline_query', async (ctx) => {
     return ctx.answerInlineQuery([])
   }
 
-  const botUsername = process.env.TELEGRAM_BOT_USERNAME || process.env.VITE_BOT_USERNAME || 'YogaBingoBot'
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME || process.env.VITE_BOT_USERNAME || 'GoBingoBot'
   const referralUrl = `https://t.me/${botUsername.replace(/^@/, '')}?start=${encodeURIComponent(referral)}`
   await ctx.answerInlineQuery([{
     type: 'article',
-    id: 'yogabingo-referral',
-    title: 'Play YogaBingo!',
+    id: 'Gobingo-referral',
+    title: 'Play GoBingo!',
     description: 'Tap to join the game and win big!',
     input_message_content: {
-      message_text: `🎰 Join me on YogaBingo and win big!\n${referralUrl}`,
+      message_text: `🎰 Join me on GoBingo and win big!\n${referralUrl}`,
     },
     reply_markup: {
       inline_keyboard: [
