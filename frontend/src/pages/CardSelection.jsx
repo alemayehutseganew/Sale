@@ -36,6 +36,7 @@ export default function CardSelection() {
   const [selectedCard, setSelectedCard] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const roomId = searchParams.get('roomId');
 
   useEffect(() => {
     const fetchTakenCards = async () => {
@@ -58,6 +59,7 @@ export default function CardSelection() {
 
     setLoading(true);
     setError('');
+    let responseRoomId = roomId;
 
     try {
       const res = await fetchApi('/rooms/join', {
@@ -70,6 +72,7 @@ export default function CardSelection() {
       });
 
       const data = await res.json();
+      responseRoomId = responseRoomId || data.roomId;
 
       if (!res.ok) {
         throw new Error(data.error || t('failedToJoinRoom'));
@@ -82,6 +85,13 @@ export default function CardSelection() {
 
       navigate(`/game?roomId=${data.roomId}&stake=${stake}`);
     } catch (err) {
+      if (/game (has )?already started/i.test(err.message)) {
+        const gameParams = new URLSearchParams({ stake, spectator: 'true' });
+        if (responseRoomId) gameParams.set('roomId', responseRoomId);
+        navigate(`/game?${gameParams.toString()}`);
+        return;
+      }
+
       setError(err.message);
       setLoading(false);
       if (err.message.includes('taken')) {
@@ -113,7 +123,7 @@ export default function CardSelection() {
             </div>
           )}
 
-          <div className="grid grid-cols-6 gap-2 pb-4 sm:grid-cols-8 md:grid-cols-10">
+          <div className="grid grid-cols-6 gap-1 pb-4 sm:grid-cols-8 md:grid-cols-10">
             {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
               const isTaken = takenCards.includes(cardNumber);
               const isSelected = selectedCard === cardNumber;
@@ -128,12 +138,12 @@ export default function CardSelection() {
                     setSelectedCard(cardNumber);
                     setError('');
                   }}
-                  className={`flex min-h-10 items-center justify-center rounded-lg border-b-4 py-2 text-sm font-bold transition-all ${
+                  className={`flex min-h-8 items-center justify-center rounded-md border px-1 py-1 text-xs font-bold transition-all duration-100 active:translate-y-1 active:shadow-none ${
                     isSelected
-                      ? 'border-blue-300 bg-blue-600 text-white ring-2 ring-blue-300'
+                      ? 'border-blue-300 bg-blue-600 text-white ring-2 ring-blue-300 shadow-[0_3px_0_rgb(96,165,250)]'
                       : isTaken
                         ? 'cursor-not-allowed border-gray-900 bg-gray-800 text-gray-600 opacity-60'
-                        : 'border-gray-300 bg-white text-black shadow-md hover:-translate-y-0.5 hover:shadow-lg active:translate-y-1'
+                        : 'border-gray-300 bg-white text-black shadow-[0_3px_0_rgb(156,163,175)] hover:-translate-y-0.5'
                   }`}
                 >
                   {cardNumber}
