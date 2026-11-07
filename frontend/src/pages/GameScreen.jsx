@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../LanguageContext';
 import SocketService from '../services/socket';
+import { fetchApi } from '../services/api';
 import { getMuteState, playBallCall, toggleMute } from '../utils/bingoSounds';
 
 const serverMessageKeys = {
@@ -64,6 +65,9 @@ const GameScreen = () => {
   const [calledHistory, setCalledHistory] = useState([]);
   const [markedNumbers, setMarkedNumbers] = useState([]);
   const [cardsData, setCardsData] = useState([]);
+  const [takenCards, setTakenCards] = useState([]);
+  const [cardChangeLoading, setCardChangeLoading] = useState(false);
+  const [cardSelectionError, setCardSelectionError] = useState('');
   const [playerCount, setPlayerCount] = useState(0);
   const playersCount = playerCount;
   const [readyPlayers, setReadyPlayers] = useState(0);
@@ -115,7 +119,11 @@ const GameScreen = () => {
       alert(`⚠️ ${translateServerMessage(data.message)}`);
       window.location.href = '/';
     });
-    socket.on('countdown_tick', (data) => setCountdown(data.timeLeft ?? data.seconds ?? null));
+    socket.on('countdown_tick', (data) => {
+      const timeLeft = data.timeLeft ?? data.seconds ?? null;
+      const parsedTimeLeft = timeLeft === null ? null : Number(timeLeft);
+      setCountdown(Number.isFinite(parsedTimeLeft) ? parsedTimeLeft : null);
+    });
     socket.on('my_cards', (data) => {
       if (!isSpectator && data.cards && data.cards.length > 0) setCardsData(data.cards);
     });
@@ -229,6 +237,55 @@ const GameScreen = () => {
     };
   }, [socket, roomId, userId, stake, isSpectator, navigate]);
 
+  useEffect(() => {
+    if (isSpectator || gameStarted) return;
+
+    const fetchTakenCards = async () => {
+      try {
+        const res = await fetchApi(`/rooms/active-cards?stake=${stake}`);
+        if (!res.ok) throw new Error('Failed to fetch active cards');
+        const data = await res.json();
+        setTakenCards(data.takenCards || []);
+      } catch (err) {
+        console.error('Failed to fetch active cards', err);
+        setCardSelectionError(err.message);
+      }
+    };
+
+    fetchTakenCards();
+  }, [stake, isSpectator, gameStarted]);
+
+  const handleCardChange = async (cardNumber) => {
+    const currentCardId = Number(cardsData[0]?.id || cardsData[0]?.cardId);
+    if (gameStarted || countdown === 0 || cardChangeLoading || cardNumber === currentCardId) return;
+
+    setCardChangeLoading(true);
+    setCardSelectionError('');
+    try {
+      const res = await fetchApi('/rooms/join', {
+        method: 'POST',
+        body: JSON.stringify({
+          stake,
+          roomId,
+          card_number: cardNumber,
+          userId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to change card');
+
+      setCardsData([data.card]);
+      setTakenCards((prev) => [...prev.filter((id) => id !== currentCardId), cardNumber]);
+    } catch (err) {
+      setCardSelectionError(err.message);
+      if (err.message.toLowerCase().includes('taken')) {
+        setTakenCards((prev) => [...new Set([...prev, cardNumber])]);
+      }
+    } finally {
+      setCardChangeLoading(false);
+    }
+  };
+
   const handleDaub = (num) => {
     if (!calledNumbers.map(Number).includes(Number(num))) return;
     if (markedNumbers.map(Number).includes(Number(num))) return;
@@ -341,6 +398,97 @@ const GameScreen = () => {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (!gameStarted) {
+    const selectedCard = cardsData[0];
+    const cardChangeLocked = gameStarted || countdown === 0;
+
+    return (
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#0f172a] text-white">
+        <div className="flex-1 overflow-y-auto p-4 pb-44">
+          <div className="mx-auto max-w-4xl">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h1 className="text-xl font-bold sm:text-2xl">{t('selectCard', { stake })}</h1>
+              <span className="rounded bg-[#2A4B6E] px-3 py-1 text-xs font-bold">
+                {t('players')}: {playersCount}
+              </span>
+            </div>
+            {cardSelectionError && (
+              <div className="mb-3 rounded bg-red-600 p-3 text-center text-sm text-white">
+                {cardSelectionError}
+              </div>
+            )}
+            <div className="grid grid-cols-6 gap-2 pb-4 sm:grid-cols-8 md:grid-cols-10">
+              {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
+                const isSelected = Number(selectedCard?.id || selectedCard?.cardId) === cardNumber;
+                const isTaken = takenCards.includes(cardNumber) && !isSelected;
+                return (
+                  <button
+                    key={cardNumber}
+                    type="button"
+                    disabled={isTaken || cardChangeLoading || cardChangeLocked}
+                    aria-pressed={isSelected}
+                    onClick={() => handleCardChange(cardNumber)}
+                    className={`flex min-h-10 items-center justify-center rounded-lg border-b-4 py-2 text-sm font-bold transition-all ${
+                      isSelected
+                        ? 'border-blue-300 bg-blue-600 text-white ring-2 ring-blue-300'
+                        : isTaken || cardChangeLocked
+                          ? 'cursor-not-allowed border-gray-900 bg-gray-800 text-gray-600 opacity-60'
+                          : 'border-gray-300 bg-white text-black shadow-md hover:-translate-y-0.5 hover:shadow-lg active:translate-y-1'
+                    }`}
+                  >
+                    {cardNumber}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="fixed inset-x-0 bottom-0 z-30 flex gap-3 border-t border-gray-700 bg-[#0f172a] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:gap-4 sm:p-4">
+          <div className="flex min-h-32 flex-1 flex-col justify-center rounded-xl bg-white p-2 text-gray-900">
+            <div className="mb-1 text-center text-xs font-bold">
+              {selectedCard ? `Card ${selectedCard.id || selectedCard.cardId}` : t('loadingCard')}
+            </div>
+            {selectedCard?.matrix ? (
+              <div className="grid grid-cols-5 gap-0.5">
+                {selectedCard.matrix.flat().map((number, index) => (
+                  <span
+                    key={index}
+                    className={`flex aspect-square items-center justify-center rounded text-[9px] font-bold sm:text-xs ${
+                      index === 12 ? 'bg-blue-600 text-white' : 'bg-gray-100'
+                    }`}
+                  >
+                    {index === 12 ? 'F' : number}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-center text-xs text-gray-500">{t('loadingCard')}</p>
+            )}
+          </div>
+
+          <div className="flex min-h-32 flex-1 flex-col items-center justify-center rounded-xl bg-blue-900/50 p-2 text-center">
+            {countdown !== null ? (
+              <>
+                <p className="mb-1 text-xs text-blue-100">{t('gameStartsIn')}</p>
+                <span className="font-mono text-3xl font-black text-white sm:text-4xl">{formatTime(countdown)}</span>
+                <p className="mt-1 text-xs text-blue-100">
+                  {cardChangeLocked ? t('waitingForGame') : t('getReady')}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-mono text-3xl font-black text-white sm:text-4xl">--:--</p>
+                <p className="mt-1 text-xs text-blue-100">{t('waitingForPlayers')}</p>
+              </>
+            )}
+            {cardChangeLoading && <span className="mt-1 text-xs text-blue-100">{t('loadingCard')}</span>}
+          </div>
+        </div>
       </div>
     );
   }
