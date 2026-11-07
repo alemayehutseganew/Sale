@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchApi } from '../services/api';
+import SocketService from '../services/socket';
 import { unlockAudio } from '../utils/bingoSounds';
 import { useTranslation } from 'react-i18next';
 
@@ -53,6 +54,50 @@ export default function CardSelection() {
     fetchTakenCards();
   }, [stake]);
 
+  useEffect(() => {
+    const userId = localStorage.getItem('dbUserId');
+    if (!roomId || !userId) return undefined;
+
+    const socket = SocketService.get() || SocketService.connect();
+    const redirectToGame = () => {
+      const gameParams = new URLSearchParams({ roomId, stake });
+      navigate(`/game?${gameParams.toString()}`);
+    };
+    const handleRoomUpdate = (data) => {
+      const status = String(data?.status || '').toUpperCase();
+      if (['COUNTDOWN', 'PLAYING', 'CLAIMING', 'COMPLETED', 'ENDED'].includes(status)) {
+        redirectToGame();
+      }
+    };
+    const handleCountdown = (data) => {
+      const timeLeft = Number(data?.timeLeft ?? data?.seconds);
+      if (Number.isFinite(timeLeft)) redirectToGame();
+    };
+    const handleJoin = () => {
+      socket.emit('join_room', { roomId, userId, stake });
+    };
+
+    socket.on('room_update', handleRoomUpdate);
+    socket.on('room_updated', handleRoomUpdate);
+    socket.on('game_starting_countdown', redirectToGame);
+    socket.on('countdown_tick', handleCountdown);
+    socket.on('game_started', redirectToGame);
+    socket.on('game_in_progress', redirectToGame);
+
+    if (socket.connected) handleJoin();
+    else socket.on('connect', handleJoin);
+
+    return () => {
+      socket.off('connect', handleJoin);
+      socket.off('room_update', handleRoomUpdate);
+      socket.off('room_updated', handleRoomUpdate);
+      socket.off('game_starting_countdown', redirectToGame);
+      socket.off('countdown_tick', handleCountdown);
+      socket.off('game_started', redirectToGame);
+      socket.off('game_in_progress', redirectToGame);
+    };
+  }, [navigate, roomId, stake]);
+
   const handleCardSelect = async () => {
     unlockAudio();
     if (!selectedCard || takenCards.includes(selectedCard)) return;
@@ -85,8 +130,8 @@ export default function CardSelection() {
 
       navigate(`/game?roomId=${data.roomId}&stake=${stake}`);
     } catch (err) {
-      if (/game (has )?already started/i.test(err.message)) {
-        const gameParams = new URLSearchParams({ stake, spectator: 'true' });
+      if (/started|in progress|already playing|cannot join/i.test(err.message)) {
+        const gameParams = new URLSearchParams({ stake });
         if (responseRoomId) gameParams.set('roomId', responseRoomId);
         navigate(`/game?${gameParams.toString()}`);
         return;
