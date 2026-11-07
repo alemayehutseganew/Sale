@@ -1,3 +1,5 @@
+console.log('🤖 Bot instance initialized...')
+
 const { Telegraf, Markup } = require('telegraf')
 const db = require('../db')
 const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/paymentService')
@@ -108,42 +110,47 @@ async function getBotUsername() {
 
 bot.start(async (ctx) => {
   try {
-    await registerBotCommands()
-  } catch {
-    // Keep /start available even if Telegram command-menu registration fails.
-  }
-
-  const payload = ctx.startPayload
-  if (payload) {
-    let webAppUrl = FRONTEND_URL
+    console.log('[BOT TRACE] /start command triggered!')
     try {
-      const parsedUrl = new URL(FRONTEND_URL)
-      const referral = payload.startsWith('REF_') ? payload.slice(4) : payload
-      parsedUrl.searchParams.set('ref', /^\d+$/.test(referral) ? referral : `@${referral}`)
-      webAppUrl = parsedUrl.toString()
-    } catch (err) {
-      console.error('[BOT] Invalid FRONTEND_URL for referral link:', err.message)
-      return ctx.reply('The game link is temporarily unavailable.')
+      await registerBotCommands()
+    } catch {
+      // Keep /start available even if Telegram command-menu registration fails.
     }
 
-    return ctx.reply('Welcome to YogaBingo! 🎰', {
+    const payload = ctx.startPayload
+    if (payload) {
+      let webAppUrl = FRONTEND_URL
+      try {
+        const parsedUrl = new URL(FRONTEND_URL)
+        const referral = payload.startsWith('REF_') ? payload.slice(4) : payload
+        parsedUrl.searchParams.set('ref', /^\d+$/.test(referral) ? referral : `@${referral}`)
+        webAppUrl = parsedUrl.toString()
+      } catch (err) {
+        console.error('[BOT] Invalid FRONTEND_URL for referral link:', err.message)
+        return ctx.reply('The game link is temporarily unavailable.')
+      }
+
+      return ctx.reply('Welcome to YogaBingo! 🎰', {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🎮 Open Game', web_app: { url: webAppUrl } }],
+            [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
+          ],
+        },
+      }).catch((err) => console.error('Start error:', err.message))
+    }
+
+    return ctx.reply(getT('en').choose_lang, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🎮 Open Game', web_app: { url: webAppUrl } }],
+          [{ text: '🇬🇧 English', callback_data: 'lang_en' }, { text: '🇪🇹 አማርኛ', callback_data: 'lang_am' }],
           [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
-        ],
-      },
+        ]
+      }
     }).catch((err) => console.error('Start error:', err.message))
+  } catch (err) {
+    console.error('❌ /start CRASH:', err)
   }
-
-  ctx.reply(getT('en').choose_lang, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '🇬🇧 English', callback_data: 'lang_en' }, { text: '🇪🇹 አማርኛ', callback_data: 'lang_am' }],
-        [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
-      ]
-    }
-  }).catch((err) => console.error('Start error:', err.message))
 })
 
 bot.command(['invite', 'refer'], sendInvite)
@@ -406,5 +413,9 @@ const handleUpdate = async (req, res) => {
     res.status(500).send('Error')
   }
 }
+
+bot.on('message', (ctx) => {
+  console.log('[BOT TRACE] Incoming message:', ctx.message.text || 'non-text message')
+})
 
 module.exports = { bot, getMainMenu, handleUpdate }

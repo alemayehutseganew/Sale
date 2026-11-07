@@ -40,7 +40,7 @@ const usersRoutes = require('./routes/users')
 const adminRoutes = require('./routes/admin')
 const db = require('./db')
 const { setupSocket } = require('./sockets/gameHandler')
-const { handleUpdate } = require('./bot')
+const { bot } = require('./bot')
 
 const app = express()
 
@@ -80,21 +80,14 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-app.post('/api/bot/webhook', (req, res) => {
-  const update = req.body || {}
-  const updateType = update.message
-    ? 'message'
-    : update.callback_query
-      ? 'callback_query'
-      : update.edited_message
-        ? 'edited_message'
-        : 'other'
-
-  console.log('[telegram-webhook] Received update', {
-    updateId: update.update_id,
-    updateType
+app.post(`/telegraf/${bot.secretPathComponent()}`, (req, res) => {
+  console.log('[SERVER TRACE] Telegram update received!')
+  bot.handleUpdate(req.body, res).then(() => {
+    if (!res.headersSent) res.sendStatus(200)
+  }).catch((err) => {
+    console.error('[SERVER TRACE] Failed to handle Telegram update:', err)
+    if (!res.headersSent) res.sendStatus(500)
   })
-  handleUpdate(req, res)
 })
 
 // --- API routes ---
@@ -172,7 +165,7 @@ async function start() {
   console.log('=================================')
   try {
     await db.migrate.latest()
-    console.log('✅ Database migrations completed successfully.')
+    console.log('✅ Database migrations complete')
   } catch (err) {
     console.error('❌ MIGRATION FAILED:', err)
     // Do NOT process.exit(1) here. Let the server start so we can see the real error.
@@ -181,6 +174,15 @@ async function start() {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`)
     console.log('🤖 Telegram webhook handler is ready')
+
+    const WEBHOOK_URL = process.env.WEBHOOK_URL
+    if (WEBHOOK_URL) {
+      bot.telegram.setWebhook(`${WEBHOOK_URL}/telegraf/${bot.secretPathComponent()}`)
+        .then(() => console.log('✅ Telegram Webhook set successfully to:', WEBHOOK_URL))
+        .catch((err) => console.error('❌ Failed to set Telegram Webhook:', err))
+    } else {
+      console.error('❌ WEBHOOK_URL is not defined in environment variables!')
+    }
   })
 }
 
