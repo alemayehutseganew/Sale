@@ -29,6 +29,155 @@ export default function Lobby() {
     return () => window.removeEventListener('focus', onFocus)
   }, [refreshBalance])
 
+  useEffect(() => {
+    const savedRoom = localStorage.getItem('activeGameRoom')
+    if (!savedRoom) return
+
+    let activeRoom
+    try {
+      activeRoom = JSON.parse(savedRoom)
+    } catch (err) {
+      console.error('Failed to read saved active room:', err)
+      localStorage.removeItem('activeGameRoom')
+      return
+    }
+
+    const userId = localStorage.getItem('dbUserId')
+    const stake = Number(activeRoom?.stake)
+    const cardNumber = Number(activeRoom?.cardNumber)
+    if (
+      !userId ||
+      !activeRoom?.roomId ||
+      !Number.isFinite(stake) ||
+      stake <= 0 ||
+      !Number.isInteger(cardNumber) ||
+      cardNumber < 1 ||
+      cardNumber > 400
+    ) {
+      localStorage.removeItem('activeGameRoom')
+      return
+    }
+
+    let cancelled = false
+    const resumeActiveRoom = async () => {
+      try {
+        const query = new URLSearchParams({ userId })
+        const response = await fetchApi(
+          `/rooms/${encodeURIComponent(activeRoom.roomId)}/my-cards?${query.toString()}`,
+          { cache: 'no-store' },
+        )
+
+        if (cancelled) return
+        if (response.ok) {
+          const data = await response.json()
+          if (!Array.isArray(data.cards) || data.cards.length === 0) {
+            localStorage.removeItem('activeGameRoom')
+            return
+          }
+
+          const gameParams = new URLSearchParams({
+            roomId: activeRoom.roomId,
+            stake: String(stake),
+          })
+          navigate(`/game?${gameParams.toString()}`, { replace: true })
+          return
+        }
+
+        if (response.status === 404) {
+          localStorage.removeItem('activeGameRoom')
+          return
+        }
+
+        if (response.status === 403) {
+          const [cardsResponse, roomsResponse] = await Promise.all([
+            fetchApi(`/rooms/active-cards?stake=${encodeURIComponent(stake)}`, { cache: 'no-store' }),
+            fetchApi('/rooms', { cache: 'no-store' }),
+          ])
+          if (!cardsResponse.ok) {
+            throw new Error(`Failed to check active room cards: ${cardsResponse.status}`)
+          }
+          if (!roomsResponse.ok) {
+            throw new Error(`Failed to check waiting rooms: ${roomsResponse.status}`)
+          }
+
+          const activeCards = await cardsResponse.json()
+          if (!Array.isArray(activeCards.takenCards) || activeCards.takenCards.length === 0) {
+            localStorage.removeItem('activeGameRoom')
+            return
+          }
+
+          const waitingRoomsData = await roomsResponse.json()
+          if (!Array.isArray(waitingRoomsData.rooms)) {
+            throw new Error('Waiting rooms response was invalid.')
+          }
+          const waitingRoomsForStake = waitingRoomsData.rooms.filter(
+            (room) => Number(room.stake_amount) === stake,
+          )
+          const savedRoomIsWaiting = waitingRoomsForStake.some(
+            (room) => String(room.id) === String(activeRoom.roomId),
+          )
+          const canRejoinWaitingRoom = savedRoomIsWaiting && waitingRoomsForStake.length === 1
+          const canWatchActiveGame = waitingRoomsForStake.length === 0
+          if (!canRejoinWaitingRoom && !canWatchActiveGame) {
+            localStorage.removeItem('activeGameRoom')
+            return
+          }
+
+          const joinResponse = await fetchApi('/rooms/join', {
+            method: 'POST',
+            body: JSON.stringify({
+              stake,
+              card_number: cardNumber,
+              userId,
+            }),
+          })
+          const joinedRoom = await joinResponse.json()
+          if (cancelled) return
+          if (!joinResponse.ok) {
+            localStorage.removeItem('activeGameRoom')
+            console.error('Failed to rejoin active room:', joinedRoom.error || joinResponse.status)
+            return
+          }
+
+          if (joinedRoom.status === 'spectator') {
+            localStorage.removeItem('activeGameRoom')
+            const gameParams = new URLSearchParams({
+              roomId: joinedRoom.roomId,
+              stake: String(joinedRoom.stake || stake),
+              spectator: 'true',
+            })
+            navigate(`/game?${gameParams.toString()}`, { replace: true })
+            return
+          }
+
+          if (!joinedRoom.roomId) {
+            throw new Error('Active room join response did not include a room ID.')
+          }
+          localStorage.setItem('activeGameRoom', JSON.stringify({
+            roomId: joinedRoom.roomId,
+            stake,
+            cardNumber: joinedRoom.card?.id || cardNumber,
+          }))
+          const gameParams = new URLSearchParams({
+            roomId: joinedRoom.roomId,
+            stake: String(stake),
+          })
+          navigate(`/game?${gameParams.toString()}`, { replace: true })
+          return
+        }
+
+        throw new Error(`Failed to verify saved room: ${response.status}`)
+      } catch (err) {
+        if (!cancelled) console.error('Failed to resume active room:', err)
+      }
+    }
+
+    resumeActiveRoom()
+    return () => {
+      cancelled = true
+    }
+  }, [navigate])
+
   const handleJoin = async (stake) => {
     // Navigate to card selection instead of calling join directly
     const sanitizedStake = stake && stake > 0 ? stake : 10

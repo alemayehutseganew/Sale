@@ -128,6 +128,11 @@ export default function CardSelection() {
         return;
       }
 
+      localStorage.setItem('activeGameRoom', JSON.stringify({
+        roomId: data.roomId,
+        stake: Number(stake),
+        cardNumber: data.card?.id || selectedCard,
+      }));
       navigate(`/game?roomId=${data.roomId}&stake=${stake}`);
     } catch (err) {
       if (/started|in progress|already playing|cannot join/i.test(err.message)) {

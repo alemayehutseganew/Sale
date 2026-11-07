@@ -49,6 +49,22 @@ export default function App() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    const socket = SocketService.get() || SocketService.connect()
+    const clearActiveRoom = () => localStorage.removeItem('activeGameRoom')
+    socket.on('game_over', clearActiveRoom)
+    socket.on('game_ended_for_spectators', clearActiveRoom)
+    socket.on('room_reset', clearActiveRoom)
+    socket.on('game_aborted', clearActiveRoom)
+
+    return () => {
+      socket.off('game_over', clearActiveRoom)
+      socket.off('game_ended_for_spectators', clearActiveRoom)
+      socket.off('room_reset', clearActiveRoom)
+      socket.off('game_aborted', clearActiveRoom)
+    }
+  }, [])
+
   return (
     <LanguageProvider>
       <WalletProvider>
