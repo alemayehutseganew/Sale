@@ -44,15 +44,15 @@ function getMainMenu(lang = 'en') {
 async function registerBotCommands() {
   if (!commandRegistrationPromise) {
     commandRegistrationPromise = bot.telegram.setMyCommands([
-      { command: 'start', description: 'Start the bot and open the game' },
-      { command: 'balance', description: 'Check your wallet balance' },
+      { command: 'start', description: 'Start' },
+      { command: 'balance', description: 'balance' },
       { command: 'invite', description: 'Get your referral link to earn 5%' },
-      { command: 'deposit', description: 'Deposit ETB to play' },
-      { command: 'withdraw', description: 'Withdraw your winnings' },
-      { command: 'menu', description: 'Open the game menu' },
-      { command: 'play', description: 'Play the game' },
+      { command: 'deposit', description: 'Deposit' },
+      { command: 'withdraw', description: 'Withdraw' },
+      { command: 'menu', description: 'menu' },
+      { command: 'play', description: 'Play' },
       { command: 'help', description: 'How to play the game' },
-      { command: 'register', description: 'Register your phone number' }
+      { command: 'register', description: 'Register' }
     ]).catch((err) => {
       commandRegistrationPromise = null
       console.error('[BOT] Failed to register bot commands:', err)
