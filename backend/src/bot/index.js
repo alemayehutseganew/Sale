@@ -6,8 +6,7 @@ const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/payment
 const { getT } = require('./translations')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sale-green.vercel.app/'
-const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || 'saleg122'
-const SUPPORT_LINK = `https://t.me/${SUPPORT_USERNAME}`
+const SUPPORT_SUFFIX = '\n\nFor more support: @saleg122'
 const userStates = {}
 let commandRegistrationPromise
 let botInfoPromise
@@ -17,6 +16,11 @@ const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN)
 bot.catch((err, ctx) => {
   console.error(`[BOT] Error for ${ctx.updateType}:`, err.message)
 })
+
+function replyWithSupport(ctx, text, options) {
+  const message = `${text}${SUPPORT_SUFFIX}`
+  return options ? ctx.reply(message, options) : ctx.reply(message)
+}
 
 async function getUserLanguage(telegramId) {
   try {
@@ -38,7 +42,6 @@ function getMainMenu(lang = 'en') {
         [{ text: t.btn_balance, callback_data: 'menu_balance' }, { text: t.btn_deposit, callback_data: 'menu_deposit' }],
         [{ text: t.btn_withdraw, callback_data: 'menu_withdraw' }, { text: t.btn_room, callback_data: 'menu_room' }],
         [{ text: t.btn_help, callback_data: 'menu_help' }],
-        [{ text: t.btn_support, url: SUPPORT_LINK }]
       ]
     }
   }
@@ -55,7 +58,6 @@ async function registerBotCommands() {
       { command: 'menu', description: 'menu' },
       { command: 'play', description: 'Play' },
       { command: 'help', description: 'How to play the game' },
-      { command: 'support', description: 'Contact support' },
       { command: 'register', description: 'Register' }
     ]).catch((err) => {
       commandRegistrationPromise = null
@@ -73,7 +75,7 @@ registerBotCommands().catch((err) => {
 async function sendInvite(ctx) {
   try {
     const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-    if (!user) return ctx.reply('Please open the Mini App first to register.')
+    if (!user) return replyWithSupport(ctx, 'Please open the Mini App first to register.')
 
     const refId = user.username || user.telegram_id
     const botUsername = ctx.botInfo?.username || await getBotUsername()
@@ -84,7 +86,7 @@ async function sendInvite(ctx) {
       ? { text: '🎮 Open Game', web_app: { url: FRONTEND_URL } }
       : { text: '🎮 Open Game', url: FRONTEND_URL }
 
-    return ctx.reply(message, {
+    return replyWithSupport(ctx, message, {
       disable_web_page_preview: true,
       reply_markup: {
         inline_keyboard: [
@@ -98,7 +100,7 @@ async function sendInvite(ctx) {
     })
   } catch (err) {
     console.error('Invite command error:', err)
-    return ctx.reply('❌ Could not generate your invite link. Please try again later.')
+    return replyWithSupport(ctx, '❌ Could not generate your invite link. Please try again later.')
   }
 }
 
@@ -131,10 +133,10 @@ bot.start(async (ctx) => {
         webAppUrl = parsedUrl.toString()
       } catch (err) {
         console.error('[BOT] Invalid FRONTEND_URL for referral link:', err.message)
-        return ctx.reply('The game link is temporarily unavailable.')
+        return replyWithSupport(ctx, 'The game link is temporarily unavailable.')
       }
 
-      return ctx.reply('Welcome to GoBingo! 🎰', {
+      return replyWithSupport(ctx, 'Welcome to GoBingo! 🎰', {
         reply_markup: {
           inline_keyboard: [
             [{ text: '🎮 Open Game', web_app: { url: webAppUrl } }],
@@ -144,7 +146,7 @@ bot.start(async (ctx) => {
       }).catch((err) => console.error('Start error:', err.message))
     }
 
-    return ctx.reply(getT('en').choose_lang, {
+    return replyWithSupport(ctx, getT('en').choose_lang, {
       reply_markup: {
         inline_keyboard: [
           [{ text: '🇬🇧 English', callback_data: 'lang_en' }, { text: '🇪🇹 አማርኛ', callback_data: 'lang_am' }],
@@ -195,7 +197,7 @@ bot.action('lang_en', async (ctx) => {
   } catch (err) {
     console.error('Failed to set English language:', err.message)
   }
-  ctx.reply(getT('en').lang_set_en, getMainMenu('en')).catch(() => {})
+  replyWithSupport(ctx, getT('en').lang_set_en, getMainMenu('en')).catch(() => {})
 })
 
 bot.action('lang_am', async (ctx) => {
@@ -205,17 +207,17 @@ bot.action('lang_am', async (ctx) => {
   } catch (err) {
     console.error('Failed to set Amharic language:', err.message)
   }
-  ctx.reply(getT('am').lang_set_am, getMainMenu('am')).catch(() => {})
+  replyWithSupport(ctx, getT('am').lang_set_am, getMainMenu('am')).catch(() => {})
 })
 
 bot.command('menu', async (ctx) => {
   const lang = await getUserLanguage(ctx.from.id)
-  ctx.reply(getT(lang).main_menu, getMainMenu(lang)).catch(() => {})
+  replyWithSupport(ctx, getT(lang).main_menu, getMainMenu(lang)).catch(() => {})
 })
 
 bot.command('play', async (ctx) => {
   const t = getT(await getUserLanguage(ctx.from.id))
-  ctx.reply(t.play_prompt, {
+  replyWithSupport(ctx, t.play_prompt, {
     reply_markup: { inline_keyboard: [[{ text: t.play_btn, web_app: { url: FRONTEND_URL } }]] }
   }).catch(() => {})
 })
@@ -224,21 +226,21 @@ bot.command('balance', async (ctx) => {
   const t = getT(await getUserLanguage(ctx.from.id))
   try {
     const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-    if (user) ctx.reply(`${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`)
-    else ctx.reply(t.user_not_found)
+    if (user) replyWithSupport(ctx, `${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`)
+    else replyWithSupport(ctx, t.user_not_found)
   } catch (err) {
     console.error('[BOT ERROR] Failed to fetch balance for user:', ctx.from.id, err)
-    ctx.reply(t.err_balance).catch(() => {})
+    replyWithSupport(ctx, t.err_balance).catch(() => {})
   }
 })
 
 bot.command('help', async (ctx) => {
-  ctx.reply(getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
+  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
 })
 
 bot.command('register', async (ctx) => {
   const t = getT(await getUserLanguage(ctx.from.id))
-  return ctx.reply(
+  return replyWithSupport(ctx,
     t.register_prompt,
     Markup.keyboard([
       [Markup.button.contactRequest(t.register_btn)]
@@ -248,12 +250,12 @@ bot.command('register', async (ctx) => {
 
 bot.command('deposit', async (ctx) => {
   userStates[ctx.from.id] = 'WAITING_FOR_RECEIPT'
-  ctx.reply(getT(await getUserLanguage(ctx.from.id)).deposit_inst).catch(() => {})
+  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).deposit_inst).catch(() => {})
 })
 
 bot.command('withdraw', async (ctx) => {
   userStates[ctx.from.id] = 'WAITING_FOR_WITHDRAW_AMOUNT'
-  ctx.reply(getT(await getUserLanguage(ctx.from.id)).withdraw_prompt).catch(() => {})
+  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).withdraw_prompt).catch(() => {})
 })
 
 bot.action('menu_balance', async (ctx) => {
@@ -261,11 +263,11 @@ bot.action('menu_balance', async (ctx) => {
   try {
     await ctx.answerCbQuery().catch(() => {})
     const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-    if (!user) return ctx.reply(t.user_not_found)
-    ctx.reply(`${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`).catch(() => {})
+    if (!user) return replyWithSupport(ctx, t.user_not_found)
+    replyWithSupport(ctx, `${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`).catch(() => {})
   } catch (err) {
     console.error('Balance Error:', err)
-    ctx.reply(t.err_balance).catch(() => {})
+    replyWithSupport(ctx, t.err_balance).catch(() => {})
   }
 })
 
@@ -273,31 +275,26 @@ bot.action('menu_deposit', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   userStates[ctx.from.id] = 'WAITING_FOR_RECEIPT'
   const msg = getT(await getUserLanguage(ctx.from.id)).deposit_inst
-  ctx.reply(msg).catch(() => {})
+  replyWithSupport(ctx, msg).catch(() => {})
 })
 
 bot.action('menu_withdraw', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   userStates[ctx.from.id] = 'WAITING_FOR_WITHDRAW_AMOUNT'
-  ctx.reply(getT(await getUserLanguage(ctx.from.id)).withdraw_prompt).catch(() => {})
+  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).withdraw_prompt).catch(() => {})
 })
 
 bot.action('menu_room', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   const t = getT(await getUserLanguage(ctx.from.id))
-  ctx.reply(t.room_prompt, {
+  replyWithSupport(ctx, t.room_prompt, {
     reply_markup: { inline_keyboard: [[{ text: t.open_lobby, web_app: { url: FRONTEND_URL } }]] }
   }).catch(() => {})
 })
 
 bot.action('menu_help', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
-  ctx.reply(getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
-})
-
-bot.command('support', async (ctx) => {
-  const t = getT(await getUserLanguage(ctx.from.id))
-  await ctx.reply(t.support_text).catch(() => {})
+  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
 })
 
 bot.on('text', async (ctx) => {
@@ -309,12 +306,12 @@ bot.on('text', async (ctx) => {
     if (state === 'WAITING_FOR_RECEIPT') {
       const parsedFromSMS = parseTelebirrSMS(ctx.message.text)
       if (!parsedFromSMS) {
-        return ctx.reply('Could not find a valid transaction number in that SMS.').catch(() => {})
+        return replyWithSupport(ctx, 'Could not find a valid transaction number in that SMS.').catch(() => {})
       }
 
       const user = await db('users').where({ telegram_id: ctx.from.id }).first()
       if (!user) {
-        return ctx.reply(t.user_not_found).catch(() => {})
+        return replyWithSupport(ctx, t.user_not_found).catch(() => {})
       }
 
       console.log('[TELEBIRR VERIFY] Extracted Reference:', parsedFromSMS.transactionId)
@@ -328,16 +325,16 @@ bot.on('text', async (ctx) => {
         })
       } catch (err) {
         if (err.code === '23505') {
-          return ctx.reply(t.deposit_used).catch(() => {})
+          return replyWithSupport(ctx, t.deposit_used).catch(() => {})
         }
         if (err.statusCode === 400) {
-          return ctx.reply(`${t.deposit_verify_fail}${err.message}`).catch(() => {})
+          return replyWithSupport(ctx, `${t.deposit_verify_fail}${err.message}`).catch(() => {})
         }
         console.error('[BOT] Deposit processing failed:', err.message)
-        return ctx.reply(t.deposit_verify_fail).catch(() => {})
+        return replyWithSupport(ctx, t.deposit_verify_fail).catch(() => {})
       }
 
-      ctx.reply(`${t.deposit_success}${deposit.amount.toFixed(2)}${t.deposit_success2}`).catch(() => {})
+      replyWithSupport(ctx, `${t.deposit_success}${deposit.amount.toFixed(2)}${t.deposit_success2}`).catch(() => {})
       delete userStates[ctx.from.id]
       return
     }
@@ -345,14 +342,14 @@ bot.on('text', async (ctx) => {
     if (state === 'WAITING_FOR_WITHDRAW_AMOUNT') {
       const amount = Number(ctx.message.text)
       if (isNaN(amount) || amount < 100) {
-        return ctx.reply(t.withdraw_invalid).catch(() => {})
+        return replyWithSupport(ctx, t.withdraw_invalid).catch(() => {})
       }
 
       const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-      if (!user) return ctx.reply(t.user_not_found).catch(() => {})
+      if (!user) return replyWithSupport(ctx, t.user_not_found).catch(() => {})
 
       if (Number(user.wallet_balance) < amount) {
-        return ctx.reply(`${t.withdraw_insufficient}${Number(user.wallet_balance).toFixed(2)}.`).catch(() => {})
+        return replyWithSupport(ctx, `${t.withdraw_insufficient}${Number(user.wallet_balance).toFixed(2)}.`).catch(() => {})
       }
 
       await db.transaction(async (trx) => {
@@ -370,12 +367,12 @@ bot.on('text', async (ctx) => {
         })
       })
 
-      ctx.reply(`${t.withdraw_success}${amount.toFixed(2)}${t.withdraw_pending}`).catch(() => {})
+      replyWithSupport(ctx, `${t.withdraw_success}${amount.toFixed(2)}${t.withdraw_pending}`).catch(() => {})
       delete userStates[ctx.from.id]
     }
   } catch (err) {
     console.error('Text Handler Error:', err)
-    ctx.reply(t.err_general).catch(() => {})
+    replyWithSupport(ctx, t.err_general).catch(() => {})
   }
 })
 
@@ -391,7 +388,7 @@ bot.on('contact', async (ctx) => {
       .update({ phone_number: phoneNumber })
 
     if (updated) {
-      await ctx.reply(
+      await replyWithSupport(ctx,
         `${t.phone_saved}${phoneNumber}${t.phone_saved_suffix}`,
         Markup.removeKeyboard()
       )
@@ -402,14 +399,14 @@ bot.on('contact', async (ctx) => {
         phone_number: phoneNumber,
         wallet_balance: 0
       })
-      await ctx.reply(
+      await replyWithSupport(ctx,
         `${t.reg_complete}${phoneNumber}`,
         Markup.removeKeyboard()
       )
     }
   } catch (err) {
     console.error('Contact save error:', err)
-    await ctx.reply(t.contact_save_failed)
+    await replyWithSupport(ctx, t.contact_save_failed)
   }
 })
 
