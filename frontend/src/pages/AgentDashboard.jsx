@@ -39,6 +39,9 @@ export default function AgentDashboard() {
       profileResponse.json(),
     ])
     if (!referralsResponse.ok) {
+      if (referralsResponse.status === 404) {
+        throw new Error('Failed to load referral data')
+      }
       throw new Error(referrals.error || 'Unable to load referral information.')
     }
     if (!profileResponse.ok) {
@@ -105,9 +108,9 @@ export default function AgentDashboard() {
         <ReferralPromo />
 
         {loading ? (
-          <p className="text-center text-gray-300 py-8">{t('loading')}</p>
+          <p id="agent-referral-content" className="text-center text-gray-300 py-8">{t('loading')}</p>
         ) : error ? (
-          <div className="bg-red-500/10 border border-red-400/30 rounded-2xl p-4 text-red-200">
+          <div id="agent-referral-content" className="bg-red-500/10 border border-red-400/30 rounded-2xl p-4 text-red-200">
             <p>{error}</p>
             <button
               onClick={() => {
@@ -133,7 +136,7 @@ export default function AgentDashboard() {
           </div>
         ) : (
           <>
-            <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 mb-4">
+            <section id="agent-referral-content" className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 mb-4">
               <h2 className="text-sm text-gray-300 font-bold mb-3">{t('your_referral_link')}</h2>
               <p className="text-sm text-white mb-3">
                 {t('tg_username')}: <span className="font-bold text-yellow-300">

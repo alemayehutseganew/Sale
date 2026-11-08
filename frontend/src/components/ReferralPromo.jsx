@@ -1,9 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
 
 export default function ReferralPromo() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
 
   return (
     <section className="mb-6 rounded-xl border border-purple-700 bg-gradient-to-br from-purple-900 to-indigo-900 p-5 text-white shadow-lg">
@@ -16,7 +14,12 @@ export default function ReferralPromo() {
 
       <button
         type="button"
-        onClick={() => navigate('/agent')}
+        onClick={() => {
+          document.getElementById('agent-referral-content')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          })
+        }}
         className="w-full rounded-lg bg-green-500 px-4 py-2 font-bold text-white transition-colors hover:bg-green-600"
       >
         {t('promo_cta')}
