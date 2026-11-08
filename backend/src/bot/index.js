@@ -6,6 +6,8 @@ const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/payment
 const { getT } = require('./translations')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sale-green.vercel.app/'
+const SUPPORT_USERNAME = process.env.SUPPORT_USERNAME || 'saleg122'
+const SUPPORT_LINK = `https://t.me/${SUPPORT_USERNAME}`
 const userStates = {}
 let commandRegistrationPromise
 let botInfoPromise
@@ -35,7 +37,8 @@ function getMainMenu(lang = 'en') {
         [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
         [{ text: t.btn_balance, callback_data: 'menu_balance' }, { text: t.btn_deposit, callback_data: 'menu_deposit' }],
         [{ text: t.btn_withdraw, callback_data: 'menu_withdraw' }, { text: t.btn_room, callback_data: 'menu_room' }],
-        [{ text: t.btn_help, callback_data: 'menu_help' }]
+        [{ text: t.btn_help, callback_data: 'menu_help' }],
+        [{ text: t.btn_support, url: SUPPORT_LINK }]
       ]
     }
   }
@@ -52,6 +55,7 @@ async function registerBotCommands() {
       { command: 'menu', description: 'menu' },
       { command: 'play', description: 'Play' },
       { command: 'help', description: 'How to play the game' },
+      { command: 'support', description: 'Contact support' },
       { command: 'register', description: 'Register' }
     ]).catch((err) => {
       commandRegistrationPromise = null
@@ -289,6 +293,11 @@ bot.action('menu_room', async (ctx) => {
 bot.action('menu_help', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   ctx.reply(getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
+})
+
+bot.command('support', async (ctx) => {
+  const t = getT(await getUserLanguage(ctx.from.id))
+  await ctx.reply(t.support_text).catch(() => {})
 })
 
 bot.on('text', async (ctx) => {
