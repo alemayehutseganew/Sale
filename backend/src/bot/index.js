@@ -2,6 +2,7 @@ console.log('🤖 Bot instance initialized...')
 
 const { Telegraf, Markup } = require('telegraf')
 const db = require('../db')
+const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/paymentService')
 const { getT } = require('./translations')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sale-green.vercel.app/'
@@ -143,7 +144,7 @@ async function sendInvite(ctx) {
     })
   } catch (err) {
     console.error('Invite command error:', err)
-    return replyWithSupport(ctx, '⏳ The system is currently busy. Please try again in a few seconds.')
+    return replyWithSupport(ctx, '❌ Could not generate your invite link. Please try again later.')
   }
 }
 
@@ -273,7 +274,7 @@ bot.command('balance', async (ctx) => {
     else replyWithSupport(ctx, t.user_not_found)
   } catch (err) {
     console.error('[BOT ERROR] Failed to fetch balance for user:', ctx.from.id, err)
-    replyWithSupport(ctx, '⏳ The system is currently busy. Please try again in a few seconds.').catch(() => {})
+    replyWithSupport(ctx, t.err_balance).catch(() => {})
   }
 })
 
@@ -349,7 +350,6 @@ bot.on('text', async (ctx) => {
     if (!state) return
 
     if (state === 'WAITING_FOR_RECEIPT') {
-      const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/paymentService')
       const parsedFromSMS = parseTelebirrSMS(ctx.message.text)
       if (!parsedFromSMS) {
         return replyWithSupport(ctx, 'Could not find a valid transaction number in that SMS.').catch(() => {})
