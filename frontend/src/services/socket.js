@@ -6,7 +6,7 @@ let socket = null
 const SocketService = {
   connect: (token = localStorage.getItem('token')) => {
     if (!socket) {
-      socket = io(SOCKET_BASE_URL, { transports: ['websocket'], auth: { token } })
+      socket = io(SOCKET_BASE_URL, { auth: { token } })
     } else if (socket.auth?.token !== token) {
       socket.auth = { token }
       socket.disconnect()
