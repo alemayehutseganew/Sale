@@ -29,6 +29,7 @@ const botTranslations = {
 ✅ If there is more than one winner, the prize pool is split among them.
 
 For more support: @saleg122`,
+    alreadyRegistered: '✅ You are already registered.',
   },
   am: {
     helpMessage: `✅ መጫወቻ ካርድ
@@ -51,6 +52,7 @@ For more support: @saleg122`,
 ✅ ከአንድ በላይ አሸናፊ ካለ ደራሽ ገንዘቡን ይከፋፈላሉ።
 
 ለተጨማሪ ድጋፍ፦ @saleg122`,
+    alreadyRegistered: '✅ አስቀድመው ተመዝግበዋል።',
   },
 }
 const userStates = {}
@@ -421,11 +423,21 @@ bot.on('text', async (ctx) => {
 })
 
 bot.on('contact', async (ctx) => {
-  const t = getT(await getUserLanguage(ctx.from.id))
+  const lang = await getUserLanguage(ctx.from.id)
+  const t = getT(lang)
   try {
     const contact = ctx.message.contact
     const telegramId = ctx.from.id
     const phoneNumber = contact.phone_number
+
+    const existingUser = await db('users').where({ telegram_id: telegramId }).first()
+    if (existingUser && existingUser.phone_number) {
+      await ctx.reply(
+        (botTranslations[lang] || botTranslations.en).alreadyRegistered,
+        Markup.removeKeyboard()
+      )
+      return
+    }
 
     const updated = await db('users')
       .where({ telegram_id: telegramId })
