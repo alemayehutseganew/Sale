@@ -2,7 +2,6 @@ console.log('🤖 Bot instance initialized...')
 
 const { Telegraf, Markup } = require('telegraf')
 const db = require('../db')
-const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/paymentService')
 const { getT } = require('./translations')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sale-green.vercel.app/'
@@ -350,6 +349,7 @@ bot.on('text', async (ctx) => {
     if (!state) return
 
     if (state === 'WAITING_FOR_RECEIPT') {
+      const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/paymentService')
       const parsedFromSMS = parseTelebirrSMS(ctx.message.text)
       if (!parsedFromSMS) {
         return replyWithSupport(ctx, 'Could not find a valid transaction number in that SMS.').catch(() => {})

@@ -32,14 +32,7 @@ if (missingVars.length > 0) {
 const express = require('express')
 const cors = require('cors')
 const http = require('http')
-const authRoutes = require('./routes/auth')
-const roomRoutes = require('./routes/rooms')
-const paymentsRoutes = require('./routes/payments')
-const walletRoutes = require('./routes/wallet')
-const usersRoutes = require('./routes/users')
-const adminRoutes = require('./routes/admin')
 const db = require('./db')
-const { setupSocket } = require('./sockets/gameHandler')
 const { bot } = require('./bot')
 
 const app = express()
@@ -92,12 +85,18 @@ app.post(`/telegraf/${bot.secretPathComponent()}`, (req, res) => {
 })
 
 // --- API routes ---
-app.use('/api/auth', authRoutes)
-app.use('/api/rooms', roomRoutes)
-app.use('/api/payments', paymentsRoutes)
-app.use('/api/wallet', walletRoutes)
-app.use('/api/users', usersRoutes)
-app.use('/api/admin', adminRoutes)
+function useLazyRouter(path, modulePath) {
+  app.use(path, (req, res, next) => {
+    require(modulePath)(req, res, next)
+  })
+}
+
+useLazyRouter('/api/auth', './routes/auth')
+useLazyRouter('/api/rooms', './routes/rooms')
+useLazyRouter('/api/payments', './routes/payments')
+useLazyRouter('/api/wallet', './routes/wallet')
+useLazyRouter('/api/users', './routes/users')
+useLazyRouter('/api/admin', './routes/admin')
 console.log('✅ API routes mounted: /api/auth, /api/rooms, /api/payments, /api/wallet, /api/users, /api/admin')
 
 // --- 404 (must come after all routes) ---
@@ -121,11 +120,14 @@ app.use((err, req, res, next) => {
 
 // --- HTTP + Socket.io ---
 const server = http.createServer(app)
-const io = setupSocket(server)
-app.set('io', io)
+let io
 
-// Optional Redis adapter for horizontal scaling
-if (process.env.REDIS_URL) {
+function configureRedisAdapter() {
+  if (!process.env.REDIS_URL) {
+    console.log('⚠️ REDIS_URL not set. Using in-memory Socket.io adapter.')
+    return
+  }
+
   try {
     const { createAdapter } = require('@socket.io/redis-adapter')
     const { createClient } = require('redis')
@@ -140,8 +142,6 @@ if (process.env.REDIS_URL) {
   } catch (err) {
     console.log('⚠️ Redis packages not installed. Using in-memory adapter.')
   }
-} else {
-  console.log('⚠️ REDIS_URL not set. Using in-memory Socket.io adapter.')
 }
 
 const PORT = process.env.PORT || 3001
@@ -172,6 +172,11 @@ async function start() {
     // Do NOT process.exit(1) here. Let the server start so we can see the real error.
   }
 
+  const { setupSocket } = require('./sockets/gameHandler')
+  io = setupSocket(server)
+  app.set('io', io)
+  configureRedisAdapter()
+
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`)
     console.log('🤖 Telegram webhook handler is ready')
@@ -190,7 +195,7 @@ async function start() {
 // --- Graceful shutdown (important for real-money: avoid mid-transaction kills) ---
 function shutdown(signal) {
   console.log(`\n${signal} received. Shutting down gracefully...`)
-  io.close(() => {
+  const closeServer = () => {
     server.close(() => {
       db.destroy()
         .catch((err) => console.error('DB destroy error:', err))
@@ -199,7 +204,9 @@ function shutdown(signal) {
           process.exit(0)
         })
     })
-  })
+  }
+  if (io) io.close(closeServer)
+  else closeServer()
   // Hard exit if something hangs
   setTimeout(() => {
     console.error('❌ Forced shutdown after timeout')
