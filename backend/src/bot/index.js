@@ -7,6 +7,52 @@ const { getT } = require('./translations')
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sale-green.vercel.app/'
 const SUPPORT_SUFFIX = '\n\nFor more support: @saleg122'
+const botTranslations = {
+  en: {
+    helpMessage: `✅ Game Card
+1. To start the game, select a Bingo card from the 1-400 card selection board.
+2. Inactive numbers on the board mean the card has already been selected by another player.
+3. When you select a card, it will show the numbers at the bottom.
+4. When the countdown timer reaches zero, you will automatically enter the game.
+
+✅ How the game is played
+1. After entering the game, you will find your selected card on the right side.
+2. When the game starts, the system will randomly call numbers from 1 to 75.
+3. From the numbers called by the system, select and mark (shade) the ones that match your card.
+
+🏆 Ways to win
+1. Based on the marked numbers on your card:
+• Complete a horizontal or vertical line.
+• Complete a diagonal line.
+• Mark all four corners.
+
+✅ If there is more than one winner, the prize pool is split among them.
+
+For more support: @saleg122`,
+  },
+  am: {
+    helpMessage: `✅ መጫወቻ ካርድ
+1. ጨዋታውን ለመጀመር ከ1-400 የካርድ መምረጫ ቦርድ ውስጥ አንድ የመጫወቻ ካርድ (ካርቴላ) ይምረጡ።
+2. የካርድ መምረጫ ቦርድ ላይ Inactive ቁጥሮች የሚያሳዩት መጫወቻ ካርዱ (ካርቴላው) በሌላ ተጫዋች መመረጡን ነው።
+3. የመጫወቻ ካርዱን (ካርቴላውን) ሲመርጡት ከታች የሚይዛቸውን ቁጥሮች ያሳያል።
+4. ወደ ጨዋታው ለመግባት ለምዝገባ የተሰጠው ሰኮንድ ዜሮ ሲሆን ቀጥታ ወደ ጨዋታ ያስገባል።
+
+✅ ጨዋታ እንዴት ይካሄዳል
+1. ወደ ጨዋታው ከገቡ በኋላ በመረጡት የመጫወቻ ካርድ (ካርቴላ) በቀኝ በኩል ያገኙታል።
+2. ጨዋታው ሲጀምር ሲስተሙ ከ1 እስከ 75 ያሉ ቁጥሮችን Randomly መጥራት ይጀምራል።
+3. ሲስተሙ ከሚጠራቸው ቁጥሮች ውስጥ በራስዎ የመጫወቻ ካርድ (ካርቴላ) ላይ ካሉ በመምረጥ ያጥቁሩ።
+
+🏆 አሸናፊ የሚሆኑባቸው መንገዶች
+1. መጫወቻ ካርድ (ካርቴላ) ላይ የተጠቆሩት ቁጥሮች፦
+• ወደጎን ወይም ወደታች መስመር ከሰሩ
+• ወደሁለቱም አግዳሚ (Diagonal) መስመር ከሰሩ
+• አራቱ ማእዘናት (ኮርነር) ከተጠሩ አሸናፊ ይሆናሉ።
+
+✅ ከአንድ በላይ አሸናፊ ካለ ደራሽ ገንዘቡን ይከፋፈላሉ።
+
+ለተጨማሪ ድጋፍ፦ @saleg122`,
+  },
+}
 const userStates = {}
 let commandRegistrationPromise
 let botInfoPromise
@@ -50,20 +96,16 @@ function getMainMenu(lang = 'en') {
 async function registerBotCommands() {
   if (!commandRegistrationPromise) {
     commandRegistrationPromise = bot.telegram.setMyCommands([
-      { command: 'start', description: 'Start' },
-      { command: 'balance', description: 'balance' },
-      { command: 'invite', description: 'Get your referral link to earn 5%' },
-      { command: 'deposit', description: 'Deposit' },
-      { command: 'withdraw', description: 'Withdraw' },
+      { command: 'start', description: 'start' },
+      { command: 'play', description: 'play' },
+      { command: 'invite', description: 'invite' },
       { command: 'menu', description: 'menu' },
-      { command: 'play', description: 'Play' },
-      { command: 'help', description: 'How to play the game' },
-      { command: 'register', description: 'Register' }
-    ]).catch((err) => {
-      commandRegistrationPromise = null
-      console.error('[BOT] Failed to register bot commands:', err)
-      throw err
-    })
+      { command: 'balance', description: 'balance' },
+      { command: 'deposit', description: 'deposit' },
+      { command: 'withdraw', description: 'withdraw' },
+      { command: 'register', description: 'register' },
+      { command: 'help', description: 'help' }
+    ]).then(() => console.log('✅ Commands registered')).catch(console.error)
   }
   return commandRegistrationPromise
 }
@@ -235,7 +277,8 @@ bot.command('balance', async (ctx) => {
 })
 
 bot.command('help', async (ctx) => {
-  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
+  const lang = await getUserLanguage(ctx.from.id)
+  ctx.reply((botTranslations[lang] || botTranslations.en).helpMessage).catch(() => {})
 })
 
 bot.command('register', async (ctx) => {
@@ -294,7 +337,8 @@ bot.action('menu_room', async (ctx) => {
 
 bot.action('menu_help', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
-  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).help_text).catch(() => {})
+  const lang = await getUserLanguage(ctx.from.id)
+  ctx.reply((botTranslations[lang] || botTranslations.en).helpMessage).catch(() => {})
 })
 
 bot.on('text', async (ctx) => {
