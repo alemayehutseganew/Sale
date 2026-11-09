@@ -38,8 +38,10 @@ const paymentsRoutes = require('./routes/payments')
 const walletRoutes = require('./routes/wallet')
 const usersRoutes = require('./routes/users')
 const adminRoutes = require('./routes/admin')
+const { Server } = require('socket.io')
+const jwt = require('jsonwebtoken')
 const db = require('./db')
-const { setupSocket } = require('./sockets/gameHandler')
+const { initGameHandler } = require('./sockets/gameHandler')
 const { bot } = require('./bot')
 
 const app = express()
@@ -80,7 +82,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() })
 })
 
-app.post(`/telegraf/${bot.secretPathComponent()}`, (req, res) => bot.handleUpdate(req.body, res))
+app.post(`/telegraf/${bot.secretPathComponent()}`, (req, res) => {
+  res.sendStatus(200)
+  bot.handleUpdate(req.body).catch((err) => console.error('[WEBHOOK ERROR]', err))
+})
 
 // --- API routes ---
 app.use('/api/auth', authRoutes)
@@ -112,7 +117,31 @@ app.use((err, req, res, next) => {
 
 // --- HTTP + Socket.io ---
 const server = http.createServer(app)
-const io = setupSocket(server)
+const io = new Server(server, {
+  cors: {
+    origin: [
+      'https://noor-one-beta.vercel.app',
+      'https://ked-seven.vercel.app',
+      'https://sale-green.vercel.app'
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+})
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret'
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token
+  if (!token) return next()
+
+  try {
+    const payload = jwt.verify(token, JWT_SECRET)
+    if (payload.id) socket.data.userId = payload.id
+  } catch (err) {
+    console.warn('[Socket] Invalid auth token; connecting without wallet updates:', err.message)
+  }
+  next()
+})
+initGameHandler(io)
 app.set('io', io)
 
 // Optional Redis adapter for horizontal scaling
@@ -155,13 +184,10 @@ async function start() {
   }, null, 2))
   console.log('Knex Pool settings:', JSON.stringify(db.client.config.pool, null, 2))
   console.log('=================================')
-  try {
-    await db.migrate.latest()
-    console.log('✅ Database migrations complete')
-  } catch (err) {
-    console.error('❌ MIGRATION FAILED:', err)
-    // Do NOT process.exit(1) here. Let the server start so we can see the real error.
-  }
+  Promise.resolve()
+    .then(() => db.migrate.latest())
+    .then(() => console.log('✅ Database migrations complete'))
+    .catch((err) => console.error('❌ MIGRATION FAILED:', err))
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`)
