@@ -82,11 +82,9 @@ app.get('/health', (req, res) => {
 
 app.post(`/telegraf/${bot.secretPathComponent()}`, (req, res) => {
   console.log('[SERVER TRACE] Telegram update received!')
-  bot.handleUpdate(req.body, res).then(() => {
-    if (!res.headersSent) res.sendStatus(200)
-  }).catch((err) => {
-    console.error('[SERVER TRACE] Failed to handle Telegram update:', err)
-    if (!res.headersSent) res.sendStatus(500)
+  res.sendStatus(200)
+  bot.handleUpdate(req.body).catch((err) => {
+    console.error('[WEBHOOK ASYNC ERROR]:', err)
   })
 })
 

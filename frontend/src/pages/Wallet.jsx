@@ -12,6 +12,8 @@ export default function Wallet() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [messageType, setMessageType] = useState('')
+  const [userError, setUserError] = useState('')
+  const [balanceError, setBalanceError] = useState('')
   const [depositAmount, setDepositAmount] = useState('')
   const [reference, setReference] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState(100)
@@ -29,8 +31,10 @@ export default function Wallet() {
         const data = await res.json()
         setUser(data)
       }
+      setUserError('')
     } catch (err) {
       console.error('Failed to load user:', err)
+      setUserError('Connection slow. Please refresh.')
     }
   }
 
@@ -45,8 +49,16 @@ export default function Wallet() {
   }, [token])
 
   useEffect(() => {
-    refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
-    const onFocus = () => refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
+    const refreshWalletBalance = () => {
+      refreshBalance()
+        .then(() => setBalanceError(''))
+        .catch((err) => {
+          console.error('Failed to refresh wallet balance:', err)
+          setBalanceError('Connection slow. Please refresh.')
+        })
+    }
+    refreshWalletBalance()
+    const onFocus = refreshWalletBalance
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [refreshBalance])
@@ -113,6 +125,11 @@ export default function Wallet() {
     <div className="min-h-screen bg-gradient-to-b from-[#0f2027] via-[#203a43] to-[#2c5364] text-white p-4">
       <button onClick={() => navigate('/')} className="mb-4 text-yellow-400">← {t('back')}</button>
       <h1 className="text-2xl font-bold mb-4">{t('wallet')}</h1>
+      {(userError || balanceError) && (
+        <p role="alert" className="mb-4 text-center text-red-400">
+          {userError || balanceError}
+        </p>
+      )}
 
       {/* Balance Cards */}
       <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-4">

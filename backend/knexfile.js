@@ -49,9 +49,9 @@ module.exports = {
     pool: {
       min: 0, // CRITICAL: Do not keep idle connections
       max: 1, // CRITICAL: Only 1 connection per serverless instance
-      acquireTimeoutMillis: 60000,
+      acquireTimeoutMillis: 30000,
       createTimeoutMillis: 30000,
-      idleTimeoutMillis: 10000
+      idleTimeoutMillis: 5000
     },
     migrations: {
       directory: './migrations'

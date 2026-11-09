@@ -144,7 +144,7 @@ async function sendInvite(ctx) {
     })
   } catch (err) {
     console.error('Invite command error:', err)
-    return replyWithSupport(ctx, '❌ Could not generate your invite link. Please try again later.')
+    return replyWithSupport(ctx, '⏳ The system is currently busy. Please try again in a few seconds.')
   }
 }
 
@@ -274,7 +274,7 @@ bot.command('balance', async (ctx) => {
     else replyWithSupport(ctx, t.user_not_found)
   } catch (err) {
     console.error('[BOT ERROR] Failed to fetch balance for user:', ctx.from.id, err)
-    replyWithSupport(ctx, t.err_balance).catch(() => {})
+    replyWithSupport(ctx, '⏳ The system is currently busy. Please try again in a few seconds.').catch(() => {})
   }
 })
 

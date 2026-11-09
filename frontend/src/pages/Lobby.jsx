@@ -17,14 +17,24 @@ export default function Lobby() {
 
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [balanceError, setBalanceError] = useState('')
+  const [roomError, setRoomError] = useState('')
 
   const toggleLanguage = () => {
     changeLanguage(i18n.language === 'en' ? 'am' : 'en')
   }
 
   useEffect(() => {
-    refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
-    const onFocus = () => refreshBalance().catch((err) => console.error('Failed to refresh wallet balance:', err))
+    const refreshWalletBalance = () => {
+      refreshBalance()
+        .then(() => setBalanceError(''))
+        .catch((err) => {
+          console.error('Failed to refresh wallet balance:', err)
+          setBalanceError('Connection slow. Please refresh.')
+        })
+    }
+    refreshWalletBalance()
+    const onFocus = refreshWalletBalance
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [refreshBalance])
@@ -68,6 +78,7 @@ export default function Lobby() {
         )
 
         if (cancelled) return
+        setRoomError('')
         if (response.ok) {
           const data = await response.json()
           if (!Array.isArray(data.cards) || data.cards.length === 0) {
@@ -168,7 +179,10 @@ export default function Lobby() {
 
         throw new Error(`Failed to verify saved room: ${response.status}`)
       } catch (err) {
-        if (!cancelled) console.error('Failed to resume active room:', err)
+        if (!cancelled) {
+          console.error('Failed to resume active room:', err)
+          setRoomError('Connection slow. Please refresh.')
+        }
       }
     }
 
@@ -227,6 +241,11 @@ export default function Lobby() {
           </div>
         </div>
       </div>
+      {(balanceError || roomError) && (
+        <p role="alert" className="relative z-10 px-4 text-center text-red-300">
+          {balanceError || roomError}
+        </p>
+      )}
 
       {/* Header */}
       <div className="relative z-10 text-center mt-6 mb-10 px-4">
