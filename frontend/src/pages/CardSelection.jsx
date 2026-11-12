@@ -187,7 +187,7 @@ export default function CardSelection() {
             </div>
           )}
 
-          <div className="mx-auto grid max-w-lg grid-cols-6 gap-1 p-2 pb-4 sm:gap-1.5">
+          <div className="mx-auto grid max-w-lg grid-cols-6 gap-1 p-2 pb-4">
             {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
               const isTaken = takenCards.includes(cardNumber);
               const isSelected = selectedCard === cardNumber;
@@ -202,7 +202,7 @@ export default function CardSelection() {
                     setSelectedCard(cardNumber);
                     setError('');
                   }}
-                  className={`relative flex h-9 min-w-0 touch-manipulation select-none items-center justify-center rounded-lg border px-1 text-xs font-bold transition-all duration-100 sm:h-10 sm:text-sm ${
+                  className={`relative flex h-7 min-w-0 touch-manipulation select-none items-center justify-center rounded-lg border px-1 text-[11px] font-bold transition-all duration-100 sm:h-8 ${
                     isSelected
                       ? 'scale-[0.96] border-blue-900 bg-gradient-to-b from-blue-400 to-blue-600 text-white shadow-[inset_0_4px_8px_rgba(0,0,0,0.4)]'
                       : isTaken
