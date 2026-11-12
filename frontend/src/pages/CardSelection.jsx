@@ -34,6 +34,7 @@ export default function CardSelection() {
   const { t } = useTranslation();
 
   const [takenCards, setTakenCards] = useState([]);
+  const [, setPlayersCount] = useState(0);
   const [selectedCard, setSelectedCard] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -56,9 +57,10 @@ export default function CardSelection() {
 
   useEffect(() => {
     const userId = localStorage.getItem('dbUserId');
-    if (!roomId || !userId) return undefined;
+    if (!userId) return undefined;
 
     const socket = SocketService.get() || SocketService.connect();
+    if (!socket.connected) socket.connect();
     const redirectToGame = () => {
       const gameParams = new URLSearchParams({ roomId, stake });
       navigate(`/game?${gameParams.toString()}`);
@@ -74,9 +76,13 @@ export default function CardSelection() {
       if (Number.isFinite(timeLeft)) redirectToGame();
     };
     const handleJoin = () => {
-      socket.emit('join_room', { roomId, userId, stake });
+      if (roomId) socket.emit('join_room', { roomId, userId, stake });
+    };
+    const handlePlayersUpdated = (data) => {
+      if (Number.isFinite(Number(data?.count))) setPlayersCount(Number(data.count));
     };
 
+    socket.on('players_updated', handlePlayersUpdated);
     socket.on('room_update', handleRoomUpdate);
     socket.on('room_updated', handleRoomUpdate);
     socket.on('game_starting_countdown', redirectToGame);
@@ -89,6 +95,7 @@ export default function CardSelection() {
 
     return () => {
       socket.off('connect', handleJoin);
+      socket.off('players_updated', handlePlayersUpdated);
       socket.off('room_update', handleRoomUpdate);
       socket.off('room_updated', handleRoomUpdate);
       socket.off('game_starting_countdown', redirectToGame);
@@ -127,6 +134,13 @@ export default function CardSelection() {
         navigate(`/game?roomId=${data.roomId}&stake=${stake}&spectator=true`);
         return;
       }
+
+      const socket = SocketService.get() || SocketService.connect();
+      socket.emit('join_room', {
+        roomId: data.roomId,
+        userId: localStorage.getItem('dbUserId'),
+        stake: Number(stake),
+      });
 
       localStorage.setItem('activeGameRoom', JSON.stringify({
         roomId: data.roomId,
