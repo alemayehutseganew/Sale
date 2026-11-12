@@ -15,6 +15,11 @@ export default function AdminDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [selectedMetric, setSelectedMetric] = useState(null);
+  const [broadcastMsg, setBroadcastMsg] = useState('');
+  const [broadcastBonus, setBroadcastBonus] = useState('0');
+  const [broadcasting, setBroadcasting] = useState(false);
+  const [broadcastError, setBroadcastError] = useState('');
+  const [broadcastResult, setBroadcastResult] = useState('');
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -40,6 +45,40 @@ export default function AdminDashboard() {
     };
     fetchStats();
   }, []);
+
+  const handleBroadcast = async () => {
+    const bonusAmount = Number(broadcastBonus);
+    if (!broadcastMsg.trim() && (!Number.isFinite(bonusAmount) || bonusAmount <= 0)) {
+      setBroadcastError('Enter a message or a positive bonus amount.');
+      return;
+    }
+    if (!Number.isFinite(bonusAmount) || bonusAmount < 0) {
+      setBroadcastError('Bonus amount must be a non-negative number.');
+      return;
+    }
+    if (!window.confirm('Are you sure you want to send this to all users?')) return;
+
+    setBroadcasting(true);
+    setBroadcastError('');
+    setBroadcastResult('');
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetchApi('/admin/broadcast', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ message: broadcastMsg, bonusAmount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Broadcast failed.');
+      setBroadcastResult(`Sent to ${data.successCount} users. Failed: ${data.failCount}.`);
+      setBroadcastMsg('');
+      setBroadcastBonus('0');
+    } catch (err) {
+      setBroadcastError(err.message || 'Broadcast failed.');
+    } finally {
+      setBroadcasting(false);
+    }
+  };
 
   if (loading) return <div className="text-white p-6">{t('loadingDashboard')}</div>;
 
@@ -74,6 +113,40 @@ export default function AdminDashboard() {
           </button>
         ))}
       </div>
+
+      <section className="mt-8 rounded-2xl border border-slate-700 bg-slate-800 p-6 shadow-lg">
+        <h2 className="mb-4 text-xl font-bold text-white">📢 Broadcast Announcement</h2>
+        <textarea
+          aria-label="Broadcast message"
+          placeholder="Type your announcement here..."
+          className="mb-3 w-full rounded-lg bg-slate-900 p-3 text-white"
+          rows={4}
+          value={broadcastMsg}
+          onChange={(event) => setBroadcastMsg(event.target.value)}
+        />
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <input
+            aria-label="Optional bonus amount in ETB"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Optional bonus amount (ETB)"
+            className="w-full rounded-lg bg-slate-900 p-3 text-white sm:w-1/2"
+            value={broadcastBonus}
+            onChange={(event) => setBroadcastBonus(event.target.value)}
+          />
+          <button
+            type="button"
+            onClick={handleBroadcast}
+            disabled={broadcasting}
+            className="w-full rounded-lg bg-blue-600 px-6 py-3 font-bold text-white disabled:opacity-50 sm:w-1/2"
+          >
+            {broadcasting ? 'Sending...' : 'Send to All Users'}
+          </button>
+        </div>
+        {broadcastError && <p role="alert" className="mt-3 text-sm text-red-400">{broadcastError}</p>}
+        {broadcastResult && <p role="status" className="mt-3 text-sm text-green-400">{broadcastResult}</p>}
+      </section>
 
       {selectedMetric && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">

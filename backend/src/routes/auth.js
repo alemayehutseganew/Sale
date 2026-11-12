@@ -75,17 +75,27 @@ router.post('/login', async (req, res) => {
       let ownReferralCode = tgUser.username ? `@${tgUser.username}` : String(telegramId)
       const codeInUse = await db('users').where({ referral_code: ownReferralCode }).first('id')
       if (codeInUse) ownReferralCode = String(telegramId)
-      const [created] = await db('users')
-        .insert({
-          telegram_id: telegramId,
-          username: tgUser.username || null,
-          first_name: tgUser.first_name || null,
-          wallet_balance: 0,
-          referral_code: ownReferralCode,
-          referred_by: inviter ? inviter.id : null,
+      user = await db.transaction(async (trx) => {
+        const [created] = await trx('users')
+          .insert({
+            telegram_id: telegramId,
+            username: tgUser.username || null,
+            first_name: tgUser.first_name || null,
+            wallet_balance: 20,
+            referral_code: ownReferralCode,
+            referred_by: inviter ? inviter.id : null,
+          })
+          .returning('*')
+
+        await trx('financial_ledger').insert({
+          user_id: created.id,
+          amount: 20,
+          type: 'WELCOME_BONUS',
+          reference: 'First time registration bonus',
         })
-        .returning('*')
-      user = created
+
+        return created
+      })
     }
 
     const token = jwt.sign(
