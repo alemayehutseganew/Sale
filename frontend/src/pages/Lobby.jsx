@@ -209,16 +209,18 @@ export default function Lobby() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0f2027] via-[#203a43] to-[#2c5364] text-white font-sans flex flex-col relative overflow-hidden">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#020617] font-sans text-white">
       
       {/* Decorative background glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-yellow-500/20 rounded-full blur-[120px] pointer-events-none"></div>
+      <div className="pointer-events-none absolute left-1/2 top-0 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-yellow-500/15 blur-[120px]"></div>
 
       {/* Top Navigation Bar */}
-      <div className="relative z-10 flex items-center justify-between px-4 py-4">
+      <div className="relative z-10 mx-3 mt-3 flex items-center justify-between rounded-2xl border border-slate-600/50 bg-slate-800/50 p-3 shadow-2xl backdrop-blur-lg">
         <button 
+          type="button"
           onClick={() => setIsMenuOpen(true)}
-          className="p-2 bg-white/10 backdrop-blur-md rounded-xl border border-white/10 hover:bg-white/20 transition-all"
+          aria-label={t('playerMenu')}
+          className="rounded-xl border border-slate-600/60 bg-slate-700/70 p-2 text-slate-100 shadow-[0_3px_0_rgb(30,41,59)] transition-all hover:bg-slate-600 active:translate-y-0.5 active:shadow-none"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -227,18 +229,20 @@ export default function Lobby() {
         
         <div className="flex items-center gap-3">
           <button 
+            type="button"
             onClick={toggleLanguage}
-            className="px-3 py-1.5 bg-white/10 backdrop-blur-md text-white text-xs font-bold rounded-full border border-white/10 hover:bg-white/20 transition-all"
+            className="min-h-11 min-w-11 rounded-full border border-slate-600/60 bg-slate-700/70 px-3 text-xs font-bold text-white shadow-[0_3px_0_rgb(30,41,59)] backdrop-blur-md transition-all hover:bg-slate-600 active:translate-y-0.5 active:shadow-none"
           >
             {i18n.language === 'en' ? 'AM' : 'EN'}
           </button>
-          <div 
+          <button
+            type="button"
             onClick={() => navigate('/wallet')}
-            className="flex items-center gap-2 bg-white text-[#0f2027] rounded-full px-4 py-1.5 font-extrabold shadow-lg shadow-yellow-500/20 cursor-pointer hover:scale-105 transition-transform"
+            className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-600 bg-gradient-to-r from-slate-900 to-slate-800 px-4 py-2 font-extrabold text-white shadow-inner transition-transform hover:scale-[1.02] active:scale-[0.98]"
           >
-            <span className="text-green-600 text-lg">₿</span>
+            <span aria-hidden="true" className="text-lg text-yellow-400">💰</span>
             <span>ETB {walletBalance.toFixed(2)}</span>
-          </div>
+          </button>
         </div>
       </div>
       {(balanceError || roomError) && (
@@ -248,49 +252,43 @@ export default function Lobby() {
       )}
 
       {/* Header */}
-      <div className="relative z-10 text-center mt-6 mb-10 px-4">
-        <h1 className="text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 drop-shadow-lg">
+      <div className="relative z-10 mb-8 mt-6 px-4 text-center">
+        <h1 className="mb-2 bg-gradient-to-r from-yellow-300 via-orange-400 to-yellow-300 bg-clip-text text-4xl font-black tracking-widest text-transparent drop-shadow-[0_0_20px_rgba(250,204,21,0.3)] sm:text-5xl">
           GOBINGO
         </h1>
-        <p className="text-gray-400 font-medium mt-2 tracking-widest uppercase text-xs">
+        <p className="mt-2 text-xs font-medium uppercase tracking-widest text-slate-400">
           {t('playWinRepeat')}
         </p>
       </div>
 
-      <div className="relative z-10 w-full max-w-md mx-auto px-4">
+      <div className="relative z-10 mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-purple-400/30 bg-gradient-to-r from-purple-600/90 to-indigo-600/90 px-1 pt-1 shadow-[0_0_25px_rgba(168,85,247,0.4)] backdrop-blur-md [&>section]:mb-0 [&>section]:rounded-2xl [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-4 [&>section]:shadow-none">
         <ReferralPromo />
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 flex-1 px-4 pb-10">
-        <h2 className="text-center text-xl font-bold text-white mb-6">
+      <div className="relative z-10 flex-1 px-4 pb-10 pt-5">
+        <h2 className="mb-6 text-center text-xl font-bold text-white">
           {t('chooseStake')}
         </h2>
 
-        <div className="flex flex-col gap-4 max-w-md mx-auto">
-          {stakes.map((stake, idx) => (
-            <div 
-              key={stake} 
-              className="relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-2xl hover:bg-white/10 transition-all group overflow-hidden"
+        <div className="mx-auto flex max-w-md flex-col gap-3">
+          {stakes.map((stake) => (
+            <button
+              key={stake}
+              type="button"
+              onClick={() => handleJoin(stake)}
+              className="group relative mb-1 flex min-h-24 w-full items-center justify-between overflow-hidden rounded-2xl border border-slate-600/50 bg-gradient-to-b from-slate-700 to-slate-800 p-4 text-left shadow-[0_8px_0_#0f172a] transition-all duration-100 hover:brightness-110 active:translate-y-2 active:shadow-none"
             >
-              
-
-              {/* Left side: Stake Value */}
-              <div className="flex flex-col">
-                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">{t('stake')}</span>
-                <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-500">
+              <span className="flex flex-col items-start">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('stake')}</span>
+                <span className="bg-gradient-to-b from-yellow-300 to-yellow-500 bg-clip-text text-3xl font-black text-transparent">
                   {stake} <span className="text-sm">ETB</span>
                 </span>
-              </div>
-
-              {/* Right side: Join Button */}
-              <button
-                onClick={() => handleJoin(stake)}
-                className="bg-gradient-to-r from-yellow-400 to-orange-500 text-[#0f2027] font-black text-lg px-6 py-3 rounded-xl shadow-lg shadow-orange-500/30 group-hover:scale-105 active:scale-95 transition-all"
-              >
+              </span>
+              <span className="rounded-xl bg-gradient-to-r from-orange-500 to-yellow-500 px-6 py-2 font-black text-white shadow-lg shadow-orange-500/20 transition-transform group-hover:scale-105">
                 {t('join')}
-              </button>
-            </div>
+              </span>
+            </button>
           ))}
         </div>
       </div>

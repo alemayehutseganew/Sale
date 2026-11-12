@@ -46,6 +46,8 @@ i18n.use(initReactI18next).init({
         promo_step_3: '3. When they win, you get 5% of their prize!',
         promo_threshold_note: '💰 Withdraw your earnings once you reach 1,000 ETB!',
         promo_cta: 'Start Inviting Now',
+        wellPlayed: 'Well Played!',
+        resultEncouragement: 'Thank you for playing. There is always another round.',
       },
     },
     am: {
@@ -81,6 +83,8 @@ i18n.use(initReactI18next).init({
         promo_step_3: '3. ሲያሸንፉ የሽልማቱን 5% ያገኛሉ!',
         promo_threshold_note: '💰 የወኪል ቀሪ ሂሳብዎ 1,000 ብር ሲደርስ ማውጣት ይችላሉ!',
         promo_cta: 'አሁን መጋበዝ ይጀምሩ',
+        wellPlayed: 'ጥሩ ተጫውተዋል!',
+        resultEncouragement: 'ስለተጫወቱ እናመሰግናለን። ሁልጊዜ ሌላ ዙር አለ።',
       },
     },
   },

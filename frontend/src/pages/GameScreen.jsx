@@ -427,11 +427,22 @@ const GameScreen = () => {
         </div>
 
         {gameResult && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-            <div className="w-full max-w-sm rounded-2xl border-4 border-red-500 bg-[#112A46] p-8 text-center">
-              <h2 className="mb-4 text-4xl font-bold text-red-400">{gameResult.title}</h2>
-              <p className="text-xl text-white">{gameResult.message}</p>
-              <p className="mt-4 text-sm text-blue-200">{t('returningNextRound')}</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+            <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-3xl border border-slate-600/50 bg-slate-800/90 p-7 text-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+              <div aria-hidden="true" className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-slate-700 text-4xl shadow-inner">
+                👏
+              </div>
+              <h2 className="mb-2 text-3xl font-black text-slate-100">{t('wellPlayed')}</h2>
+              <p className="text-sm text-slate-300">{gameResult.message}</p>
+              <p className="mt-3 text-sm text-slate-400">{t('resultEncouragement')}</p>
+              <p className="mt-4 text-xs text-blue-200">{t('returningNextRound')}</p>
+              <button
+                type="button"
+                onClick={() => { setGameResult(null); navigate('/'); }}
+                className="mt-5 min-h-11 w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 font-bold text-white shadow-[0_5px_0_#1e3a8a] transition-all active:translate-y-1 active:shadow-none"
+              >
+                {t('backToLobby')}
+              </button>
             </div>
           </div>
         )}
@@ -666,13 +677,25 @@ const GameScreen = () => {
       )}
 
       {gameResult && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className={`bg-[#112A46] rounded-2xl p-8 max-w-sm w-full text-center border-4 ${gameResult.type === 'win' ? 'border-yellow-500' : 'border-red-500'}`}>
-            <h2 className={`text-4xl font-bold mb-4 ${gameResult.type === 'win' ? 'text-yellow-400' : 'text-red-400'}`}>
-              {gameResult.title}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+          <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-3xl border border-slate-600/50 bg-slate-800/90 p-7 text-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+            <div aria-hidden="true" className={`mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full text-4xl ${gameResult.type === 'win' ? 'animate-bounce bg-yellow-400 shadow-[0_0_30px_rgba(250,204,21,0.6)]' : 'bg-slate-700 opacity-90 shadow-inner'}`}>
+              {gameResult.type === 'win' ? '🏆' : '👏'}
+            </div>
+            <h2 className={`mb-2 text-3xl font-black ${gameResult.type === 'win' ? 'bg-gradient-to-r from-yellow-300 to-yellow-500 bg-clip-text text-transparent' : 'text-slate-100'}`}>
+              {gameResult.type === 'win' ? gameResult.title : t('wellPlayed')}
             </h2>
-            <p className="text-white text-xl mb-8">{gameResult.message}</p>
-            <button type="button" onClick={() => { setGameResult(null); navigate('/'); }} className="min-h-11 w-full rounded-xl bg-white py-3 font-bold text-[#112A46]">{t('backToLobby')}</button>
+            <p className="mb-3 text-sm text-slate-300">{gameResult.message}</p>
+            {gameResult.type !== 'win' && (
+              <p className="mb-6 text-sm text-slate-400">{t('resultEncouragement')}</p>
+            )}
+            <button
+              type="button"
+              onClick={() => { setGameResult(null); navigate('/'); }}
+              className="min-h-11 w-full rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 py-3 font-bold text-white shadow-[0_5px_0_#1e3a8a] transition-all active:translate-y-1 active:shadow-none"
+            >
+              {t('backToLobby')}
+            </button>
           </div>
         </div>
       )}
