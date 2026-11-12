@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchApi } from '../services/api';
 import SocketService from '../services/socket';
@@ -37,8 +37,22 @@ export default function CardSelection() {
   const [, setPlayersCount] = useState(0);
   const [selectedCard, setSelectedCard] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [toast, setToast] = useState({ show: false, message: '', type: 'error' });
+  const toastTimeoutRef = useRef(null);
   const roomId = searchParams.get('roomId');
+
+  const showToast = (message, type = 'error') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ show: true, message, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast({ show: false, message: '', type: 'error' });
+      toastTimeoutRef.current = null;
+    }, 3000);
+  };
+
+  useEffect(() => () => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+  }, []);
 
   useEffect(() => {
     const fetchTakenCards = async () => {
@@ -110,7 +124,6 @@ export default function CardSelection() {
     if (!selectedCard || takenCards.includes(selectedCard)) return;
 
     setLoading(true);
-    setError('');
     let responseRoomId = roomId;
 
     try {
@@ -156,11 +169,8 @@ export default function CardSelection() {
         return;
       }
 
-      setError(err.message);
+      showToast(err.message || t('failedToJoinRoom'));
       setLoading(false);
-      if (err.message.includes('taken')) {
-        setTakenCards((prev) => [...prev, selectedCard]);
-      }
     }
   };
 
@@ -181,26 +191,21 @@ export default function CardSelection() {
             <span className="w-10 shrink-0" />
           </div>
 
-          {error && (
-            <div className="mb-3 rounded bg-red-600 p-3 text-center text-white">
-              {error}
-            </div>
-          )}
-
           <div className="mx-auto grid max-w-lg grid-cols-6 gap-1 p-2 pb-4">
             {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
-              const isTaken = takenCards.includes(cardNumber);
               const isSelected = selectedCard === cardNumber;
+              const isTaken = takenCards.includes(cardNumber) && !isSelected;
+              const isDisabled = isTaken || loading;
               return (
                 <button
                   key={cardNumber}
                   type="button"
-                  disabled={isTaken || loading}
+                  disabled={isDisabled}
                   aria-pressed={isSelected}
                   onClick={() => {
                     unlockAudio();
                     setSelectedCard(cardNumber);
-                    setError('');
+                    setToast({ show: false, message: '', type: 'error' });
                   }}
                   className={`relative flex h-7 min-w-0 touch-manipulation select-none items-center justify-center rounded-lg border px-1 text-[11px] font-bold transition-all duration-100 sm:h-8 ${
                     isSelected
@@ -283,6 +288,34 @@ export default function CardSelection() {
               Processing...
             </span>
           )}
+        </div>
+      </div>
+      <div
+        role="status"
+        aria-live="polite"
+        aria-hidden={!toast.show}
+        className={`pointer-events-none fixed bottom-32 left-1/2 z-50 w-11/12 max-w-sm -translate-x-1/2 transition-all duration-300 ${
+          toast.show ? 'translate-y-0 opacity-100' : 'translate-y-5 opacity-0'
+        }`}
+      >
+        <div className={`flex items-center gap-3 rounded-2xl border p-4 shadow-[0_10px_30px_rgba(239,68,68,0.3)] backdrop-blur-xl ${
+          toast.type === 'error'
+            ? 'border-red-500/50 bg-slate-800/90'
+            : 'border-emerald-500/50 bg-slate-800/90'
+        }`}>
+          <div className={`flex items-center justify-center rounded-full p-2 ${
+            toast.type === 'error' ? 'bg-red-500/20' : 'bg-emerald-500/20'
+          }`}>
+            <span className={`text-lg ${toast.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>
+              {toast.type === 'error' ? '⚠️' : '✓'}
+            </span>
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold leading-tight text-white">
+              {toast.type === 'error' ? 'Action Failed' : 'Success'}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-300">{toast.message}</p>
+          </div>
         </div>
       </div>
     </div>

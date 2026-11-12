@@ -99,20 +99,29 @@ export default function AgentDashboard() {
   const referredUsers = dashboard?.referred_users || []
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0f2027] via-[#203a43] to-[#2c5364] text-white p-4">
-      <div className="max-w-lg mx-auto">
-        <button onClick={() => navigate('/')} className="mb-4 text-yellow-400">
-          ← {t('back')}
-        </button>
-        <h1 className="text-2xl font-bold mb-4">{t('agent_dashboard')}</h1>
-        <ReferralPromo />
+    <div className="min-h-screen bg-gradient-to-b from-[#0f172a] via-[#1e293b] to-[#020617] p-4 text-white">
+      <div className="mx-auto max-w-lg">
+        <header className="mb-5 flex items-center gap-3 rounded-2xl border border-slate-600/50 bg-slate-800/50 p-3 shadow-2xl backdrop-blur-lg">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="min-h-11 rounded-xl border border-slate-600 bg-slate-700 px-4 font-bold text-white shadow-[0_3px_0_rgb(30,41,59)] transition-all active:translate-y-1 active:shadow-none"
+          >
+            ← {t('back')}
+          </button>
+          <h1 className="text-xl font-black text-white sm:text-2xl">{t('agent_dashboard')}</h1>
+        </header>
+        <div className="mb-5 overflow-hidden rounded-2xl border border-purple-400/30 bg-gradient-to-r from-purple-600/90 to-indigo-600/90 p-1 shadow-[0_0_25px_rgba(168,85,247,0.3)] backdrop-blur-md [&>section]:mb-0 [&>section]:rounded-2xl [&>section]:border-0 [&>section]:bg-transparent [&>section]:p-4 [&>section]:shadow-none">
+          <ReferralPromo />
+        </div>
 
         {loading ? (
-          <p id="agent-referral-content" className="text-center text-gray-300 py-8">{t('loading')}</p>
+          <p id="agent-referral-content" className="py-8 text-center text-slate-300">{t('loading')}</p>
         ) : error ? (
-          <div id="agent-referral-content" className="bg-red-500/10 border border-red-400/30 rounded-2xl p-4 text-red-200">
+          <div id="agent-referral-content" className="rounded-2xl border border-red-400/30 bg-red-500/10 p-4 text-red-200 backdrop-blur-md">
             <p>{error}</p>
             <button
+              type="button"
               onClick={() => {
                 setLoading(true)
                 setError('')
@@ -129,80 +138,84 @@ export default function AgentDashboard() {
                   })
                   .finally(() => setLoading(false))
               }}
-              className="mt-3 font-bold text-white underline"
+              className="mt-3 min-h-11 font-bold text-white underline"
             >
               {t('retry')}
             </button>
           </div>
         ) : (
           <>
-            <section id="agent-referral-content" className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 mb-4">
-              <h2 className="text-sm text-gray-300 font-bold mb-3">{t('your_referral_link')}</h2>
-              <p className="text-sm text-white mb-3">
+            <section id="agent-referral-content" className="mb-5 rounded-2xl border border-indigo-500/30 bg-indigo-900/40 p-5 shadow-[0_0_20px_rgba(99,102,241,0.2)] backdrop-blur-lg">
+              <h2 className="mb-3 text-sm font-bold text-indigo-200">{t('your_referral_link')}</h2>
+              <p className="mb-3 text-sm text-white">
                 {t('tg_username')}: <span className="font-bold text-yellow-300">
                   {telegramUser?.username ? `@${telegramUser.username}` : telegramUser?.telegram_id}
                 </span>
               </p>
               {!telegramUser?.username && (
-                <p className="text-xs text-yellow-400 mb-3">{t('no_tg_username_warning')}</p>
+                <p className="mb-3 text-xs text-yellow-300">{t('no_tg_username_warning')}</p>
               )}
-              <p className="break-all bg-black/20 rounded-lg p-3 text-sm text-yellow-300">
+              <p className="mb-3 break-all rounded-lg border border-slate-700 bg-slate-900/80 p-3 font-mono text-xs text-slate-300">
                 {referralLink}
               </p>
-              <div className="grid grid-cols-2 gap-3 mt-4">
+              <div className="mt-4 grid grid-cols-2 gap-3">
                 <button
+                  type="button"
                   onClick={copyLink}
-                  className="bg-yellow-500 text-[#0f2027] font-bold py-2 rounded-lg"
+                  className="min-h-11 rounded-lg bg-gradient-to-r from-indigo-500 to-indigo-600 py-2.5 text-xs font-bold text-white shadow-[0_4px_0_#312e81] transition-all active:translate-y-1 active:shadow-none"
                 >
                   {t('copy_bot_link')}
                 </button>
                 <button
+                  type="button"
                   onClick={shareToGroup}
-                  className="bg-sky-600 text-white font-bold py-2 rounded-lg"
+                  className="min-h-11 rounded-lg bg-gradient-to-r from-sky-500 to-sky-600 py-2.5 text-xs font-bold text-white shadow-[0_4px_0_#0c4a6e] transition-all active:translate-y-1 active:shadow-none"
                 >
                   {t('share_to_group')}
                 </button>
               </div>
-              {notice && <p className="text-xs text-green-300 mt-3">{notice}</p>}
+              {notice && <p role="status" className="mt-3 text-xs text-emerald-300">{notice}</p>}
             </section>
 
-            <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 mb-4">
-              <h2 className="text-sm text-gray-300 font-bold">{t('total_earned')}</h2>
-              <p className="text-3xl font-black text-green-300 mt-1">
-                ETB {Number(dashboard.total_earned || 0).toFixed(2)}
-              </p>
-            </section>
+            <div className="mb-5 grid grid-cols-2 gap-3">
+              <section className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/60 p-4 shadow-lg backdrop-blur-md">
+                <h2 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('total_earned')}</h2>
+                <p className="mt-2 text-xl font-black text-emerald-400 sm:text-2xl">
+                  {Number(dashboard.total_earned || 0).toFixed(2)} <span className="text-sm">ETB</span>
+                </p>
+              </section>
 
-            <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5 mb-4">
-              <div className="flex justify-between items-end">
-                <h2 className="text-sm text-gray-300 font-bold">{t('agent_balance')}</h2>
-                <span className="text-xs text-gray-400">{t('withdrawal_threshold')}</span>
+              <section className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-800/60 p-4 shadow-lg backdrop-blur-md">
+                <h2 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{t('agent_balance')}</h2>
+                <p className="mt-2 text-xl font-black text-white sm:text-2xl">
+                  {referralBalance.toFixed(2)} <span className="text-sm">ETB</span>
+                </p>
+                <p className="mt-1 text-[10px] text-slate-500">{t('withdrawal_threshold')}: {threshold} ETB</p>
+                <div
+                  className="mt-3 h-2.5 w-full rounded-full bg-slate-950"
+                  role="progressbar"
+                  aria-label={t('agent_balance')}
+                  aria-valuemin={0}
+                  aria-valuemax={threshold}
+                  aria-valuenow={Math.min(Math.max(referralBalance, 0), threshold)}
+                >
+                  <div className="h-2.5 rounded-full bg-gradient-to-r from-blue-500 to-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.4)]" style={{ width: `${progress}%` }} />
+                </div>
+              </section>
+            </div>
+
+            <section className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-800/60 shadow-lg backdrop-blur-md">
+              <div className="border-b border-slate-700/50 p-4">
+                <h2 className="font-bold text-white">{t('invited_players')}</h2>
               </div>
-              <p className="text-xl font-black mt-2">
-                ETB {referralBalance.toFixed(2)} <span className="text-gray-400 text-sm">/ {threshold} ETB</span>
-              </p>
-              <div
-                className="w-full bg-gray-900 rounded-full h-2.5 mt-3"
-                role="progressbar"
-                aria-label={t('agent_balance')}
-                aria-valuemin={0}
-                aria-valuemax={threshold}
-                aria-valuenow={Math.min(Math.max(referralBalance, 0), threshold)}
-              >
-                <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${progress}%` }} />
-              </div>
-            </section>
-
-            <section className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
-              <h2 className="text-lg font-bold mb-3">{t('invited_players')}</h2>
               {referredUsers.length === 0 ? (
-                <p className="text-sm text-gray-400">{t('no_referrals_yet')}</p>
+                <p className="p-4 text-sm text-slate-400">{t('no_referrals_yet')}</p>
               ) : (
-                <ul className="divide-y divide-white/10">
+                <ul className="max-h-60 divide-y divide-slate-700/50 overflow-y-auto">
                   {referredUsers.map((user) => (
-                    <li key={user.id} className="py-3 flex justify-between gap-3">
-                      <span className="font-medium">{user.name}</span>
-                      <time className="text-xs text-gray-400 shrink-0">
+                    <li key={user.id} className="flex items-center justify-between gap-3 p-4">
+                      <span className="text-sm font-medium text-slate-300">{user.name}</span>
+                      <time className="shrink-0 text-xs text-slate-500">
                         {user.joined_at
                           ? new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium' }).format(new Date(user.joined_at))
                           : ''}

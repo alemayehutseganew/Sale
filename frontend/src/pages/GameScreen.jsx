@@ -5,6 +5,7 @@ import { useLanguage } from '../LanguageContext';
 import SocketService from '../services/socket';
 import { fetchApi } from '../services/api';
 import { getMuteState, playBallCall, toggleMute } from '../utils/bingoSounds';
+import { useWallet } from '../WalletContext';
 
 const serverMessageKeys = {
   'You do not have enough balance. Please deposit funds.': 'insufficientFunds',
@@ -79,6 +80,7 @@ const GameScreen = () => {
   const userId = localStorage.getItem('dbUserId');
   const { t, i18n } = useTranslation();
   const { changeLanguage } = useLanguage();
+  const { balance } = useWallet();
   const translationRef = useRef(t);
   const noWinnerRoundRef = useRef(false);
   useEffect(() => {
@@ -561,6 +563,12 @@ const GameScreen = () => {
           </div>
         </div>
         <div className="ml-auto flex gap-2">
+          <div className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-1.5 shadow-inner">
+            <span aria-hidden="true" className="text-sm text-yellow-400">💰</span>
+            <span className="tabular-nums text-sm font-black text-white sm:text-base">
+              {Number(balance || 0).toFixed(2)} <span className="text-[10px] font-bold text-slate-400">ETB</span>
+            </span>
+          </div>
           <button type="button" onClick={() => changeLanguage(i18n.language === 'en' ? 'am' : 'en')} className="flex h-11 min-w-11 items-center justify-center rounded-full bg-slate-700 px-3 text-xs font-bold text-white shadow-[0_4px_0_rgb(51,65,85)] transition-all hover:bg-slate-600 active:translate-y-1 active:shadow-none">
             {i18n.language === 'en' ? 'AM' : 'EN'}
           </button>
