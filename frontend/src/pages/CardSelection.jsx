@@ -4,6 +4,7 @@ import { fetchApi } from '../services/api';
 import SocketService from '../services/socket';
 import { unlockAudio } from '../utils/bingoSounds';
 import { useTranslation } from 'react-i18next';
+import { useWallet } from '../WalletContext';
 
 const generateCardPreview = (cardNumber) => {
   let seed = ((cardNumber || 1) * 16807 + 12345) % 2147483647;
@@ -32,6 +33,7 @@ export default function CardSelection() {
   const stake = searchParams.get('stake') || '10';
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { balance } = useWallet();
 
   const [takenCards, setTakenCards] = useState([]);
   const [, setPlayersCount] = useState(0);
@@ -180,15 +182,20 @@ export default function CardSelection() {
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#0f172a] text-white">
       <div className="flex-1 overflow-y-auto p-4 pb-32">
         <div className="mx-auto max-w-4xl">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-600/50 bg-slate-800/60 p-2.5 shadow-xl backdrop-blur-lg">
             <button
+              type="button"
               onClick={() => navigate('/')}
-              className="shrink-0 font-bold text-yellow-500 hover:text-yellow-400"
+              className="min-h-11 shrink-0 rounded-xl border border-slate-600 bg-slate-700 px-3 font-bold text-white shadow-[0_3px_0_rgb(30,41,59)] transition-all hover:bg-slate-600 active:translate-y-1 active:shadow-none"
             >
               ← {t('back')}
             </button>
-            <h1 className="text-center text-xl font-bold sm:text-2xl">{t('selectCard', { stake })}</h1>
-            <span className="w-10 shrink-0" />
+            <div className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-1.5 shadow-inner">
+              <span aria-hidden="true" className="text-sm text-yellow-400">💰</span>
+              <span className="tabular-nums text-sm font-black text-white sm:text-base">
+                {Number(balance || 0).toFixed(2)} <span className="text-[10px] font-bold text-slate-400">ETB</span>
+              </span>
+            </div>
           </div>
 
           <div className="mx-auto grid max-w-lg grid-cols-6 gap-1 p-2 pb-4">
