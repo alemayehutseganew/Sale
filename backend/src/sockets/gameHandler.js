@@ -198,8 +198,31 @@ async function startCountdown(io, roomId) {
           }
           await trx('game_rooms').where({ id: roomId }).update({ status: 'PLAYING' })
 
-          return { success: true, validPlayerCount: validPlayers.length, poorPlayers, cardlessPlayers }
+          return {
+            success: true,
+            validPlayerCount: validPlayers.length,
+            validPlayers: validPlayers.map(({ user: validUser }) => validUser.id),
+            poorPlayers,
+            cardlessPlayers,
+          }
         })
+
+        if (settlement.success && Array.isArray(settlement.validPlayers)) {
+          for (const playerId of settlement.validPlayers) {
+            try {
+              const updatedUser = await db('users').where({ id: playerId }).first()
+              if (!updatedUser) {
+                console.error(`[Game] Could not find user ${playerId} after stake deduction.`)
+                continue
+              }
+              io.to(`user_${playerId}`).emit('wallet_updated', {
+                newBalance: Number(updatedUser.wallet_balance),
+              })
+            } catch (err) {
+              console.error(`[Game] Failed to notify user ${playerId} after stake deduction:`, err)
+            }
+          }
+        }
 
         for (const cardlessPlayer of settlement.cardlessPlayers) {
           const playerSocketId = Object.keys(room.players).find((id) => (
@@ -607,6 +630,7 @@ function initGameHandler(io) {
 
         // Process payouts in DB
         const inviterUpdates = new Map();
+        const winnerUpdates = new Map();
         await db.transaction(async (trx) => {
           for (const winnerId of room.claimedBy) {
             let winnerUser = await trx('users').where({ id: winnerId }).first();
@@ -623,6 +647,11 @@ function initGameHandler(io) {
               amount: payoutPerWinner,
               type: 'WINNING_PAYOUT'
             });
+            const updatedWinner = await trx('users').where({ id: winnerUser.id }).first();
+            if (!updatedWinner) {
+              throw new Error(`Could not load winner ${winnerUser.id} after payout.`);
+            }
+            winnerUpdates.set(winnerUser.id, updatedWinner);
             console.log(`[PAYOUT] Credited ${payoutPerWinner} to winner ${winnerUser.id}`);
 
             if (winnerUser.referred_by && referralCommissionPerWinner > 0) {
@@ -654,6 +683,16 @@ function initGameHandler(io) {
           }
           await trx('game_rooms').where({ id: roomId }).update({ status: 'ENDED' });
         });
+
+        for (const [winnerId, winner] of winnerUpdates) {
+          try {
+            io.to(`user_${winnerId}`).emit('wallet_updated', {
+              newBalance: Number(winner.wallet_balance),
+            });
+          } catch (emitErr) {
+            console.error(`[PAYOUT] Failed to notify winner ${winnerId}:`, emitErr);
+          }
+        }
 
         for (const [inviterId, inviter] of inviterUpdates) {
           try {
