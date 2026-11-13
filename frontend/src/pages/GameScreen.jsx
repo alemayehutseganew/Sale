@@ -650,7 +650,7 @@ const GameScreen = () => {
             );
           })}
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-1 items-start gap-2 min-[520px]:grid-cols-2">
+        <div className="grid min-h-0 flex-1 grid-cols-2 items-start gap-2">
           <div className="min-w-0 rounded-xl border border-slate-600/50 bg-slate-800/80 p-1.5 shadow-xl">
             <div className="grid grid-cols-5 gap-1">
               {['B', 'I', 'N', 'G', 'O'].map((letter) => (
@@ -686,7 +686,7 @@ const GameScreen = () => {
                     const isFree = index === 12 || num === 'FREE';
                     const isMarked = isFree || markedNumbers.includes(num);
                     return (
-                      <button key={index} type="button" onClick={() => !isFree && handleDaub(num)} className={`flex aspect-square min-h-11 min-w-11 items-center justify-center rounded-lg text-xs font-bold transition-all duration-150 sm:text-sm ${isMarked ? 'scale-[0.98] border border-slate-700 bg-slate-900 text-blue-300 shadow-[inset_0_4px_8px_rgba(0,0,0,0.9)]' : 'border border-slate-300 bg-slate-100 text-slate-900 shadow-[0_3px_0_rgb(148,163,184)] active:translate-y-0.5 active:shadow-none'}`}>
+                      <button key={index} type="button" onClick={() => !isFree && handleDaub(num)} className={`flex aspect-square min-w-0 items-center justify-center rounded-lg text-[10px] font-bold transition-all duration-150 sm:text-xs ${isMarked ? 'scale-[0.98] border border-slate-700 bg-slate-900 text-blue-300 shadow-[inset_0_4px_8px_rgba(0,0,0,0.9)]' : 'border border-slate-300 bg-slate-100 text-slate-900 shadow-[0_3px_0_rgb(148,163,184)] active:translate-y-0.5 active:shadow-none'}`}>
                         {isFree ? 'F' : num}
                       </button>
                     );

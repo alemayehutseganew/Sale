@@ -198,7 +198,7 @@ export default function CardSelection() {
             </div>
           </div>
 
-          <div className="mx-auto grid max-w-lg grid-cols-6 gap-1 p-2 pb-4">
+          <div className="mx-auto grid max-w-lg grid-cols-7 gap-1 p-2 pb-4 sm:grid-cols-9 md:grid-cols-11">
             {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
               const isSelected = selectedCard === cardNumber;
               const isTaken = takenCards.includes(cardNumber) && !isSelected;
@@ -214,12 +214,12 @@ export default function CardSelection() {
                     setSelectedCard(cardNumber);
                     setToast({ show: false, message: '', type: 'error' });
                   }}
-                  className={`relative flex h-7 min-w-0 touch-manipulation select-none items-center justify-center rounded-lg border px-1 text-[11px] font-bold transition-all duration-100 sm:h-8 ${
+                  className={`relative flex h-7 min-w-0 touch-manipulation select-none items-center justify-center rounded-md border border-b-2 px-0.5 text-[10px] font-bold transition-all duration-100 sm:h-8 sm:text-[11px] md:h-9 md:text-xs ${
                     isSelected
                       ? 'scale-[0.96] border-blue-900 bg-gradient-to-b from-blue-400 to-blue-600 text-white shadow-[inset_0_4px_8px_rgba(0,0,0,0.4)]'
                       : isTaken
                         ? 'cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600 opacity-60 shadow-[inset_0_3px_6px_rgba(0,0,0,0.65)]'
-                        : 'border-slate-300 bg-white text-slate-800 shadow-[0_4px_0_rgb(148,163,184)] hover:-translate-y-0.5 hover:shadow-[0_5px_0_rgb(148,163,184)] active:translate-y-1 active:shadow-none'
+                        : 'border-slate-300 bg-white text-slate-800 shadow-[0_2px_0_rgb(148,163,184)] hover:-translate-y-0.5 hover:shadow-[0_3px_0_rgb(148,163,184)] active:translate-y-0.5 active:shadow-none'
                   }`}
                 >
                   {cardNumber}
