@@ -1,28 +1,29 @@
-import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 
 export default function ReferralPromo() {
-  const { t } = useTranslation()
+  const navigate = useNavigate()
 
   return (
-    <section className="mb-6 rounded-xl border border-purple-700 bg-gradient-to-br from-purple-900 to-indigo-900 p-5 text-white shadow-lg">
-      <h2 className="mb-2 text-xl font-bold">{t('promo_title')}</h2>
-      <p className="mb-4 text-sm text-purple-200">{t('promo_subtitle')}</p>
-
-      <p className="mb-4 text-center text-xs font-semibold text-yellow-400">
-        {t('promo_threshold_note')}
-      </p>
-
+    <section className="!mb-4 flex !items-center !justify-between !rounded-xl !border !border-purple-500/30 !bg-gradient-to-r !from-purple-700 !to-indigo-600 !p-3 text-white !shadow-lg">
+      <div className="flex items-center gap-3">
+        <div className="rounded-full bg-white/20 p-2 text-xl">
+          🚀
+        </div>
+        <div>
+          <h3 className="text-xs font-bold leading-tight text-white sm:text-sm">
+            Invite &amp; Earn 5%!
+          </h3>
+          <p className="mt-0.5 text-[10px] text-purple-100 sm:text-xs">
+            Withdraw at 1,000 ETB.
+          </p>
+        </div>
+      </div>
       <button
         type="button"
-        onClick={() => {
-          document.getElementById('agent-referral-content')?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-          })
-        }}
-        className="w-full rounded-lg bg-green-500 px-4 py-2 font-bold text-white transition-colors hover:bg-green-600"
+        onClick={() => navigate('/agent')}
+        className="whitespace-nowrap rounded-lg bg-emerald-400 px-4 py-1.5 text-xs font-bold text-emerald-950 shadow-[0_2px_0_#065f46] transition-all hover:bg-emerald-500 active:translate-y-0.5 active:shadow-none"
       >
-        {t('promo_cta')}
+        Invite Now
       </button>
     </section>
   )
