@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../LanguageContext';
 import SocketService from '../services/socket';
 import { fetchApi } from '../services/api';
-import { toggleVoice, playNumberAudio, unlockAudio } from '../utils/bingoSounds';
+import { toggleVoice, playNumberAudio, unlockAudio, preloadAudio } from '../utils/bingoSounds';
 import { useWallet } from '../WalletContext';
 
 const serverMessageKeys = {
@@ -111,6 +111,10 @@ const GameScreen = () => {
   const [bingoMessage, setBingoMessage] = useState(null);
   const [gameResult, setGameResult] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
+
+  useEffect(() => {
+    preloadAudio();
+  }, []);
 
   useEffect(() => {
     const handleFirstTap = () => {

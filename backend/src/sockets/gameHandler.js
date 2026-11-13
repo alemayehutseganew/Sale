@@ -347,7 +347,7 @@ async function startCountdown(io, roomId) {
             io.to(roomId).emit('game_ended_for_spectators', { noWinner: true })
             scheduleRoomReset(io, roomId, room)
           }
-        }, 3000)
+        }, 4000)
       } catch (err) {
         console.error('[Game] Error during countdown end:', err)
         room.status = 'WAITING'
