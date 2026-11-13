@@ -44,6 +44,87 @@ const db = require('./db')
 const { initGameHandler } = require('./sockets/gameHandler')
 const { bot } = require('./bot')
 
+async function performStartupCleanup() {
+  console.log('[Cleanup] Running startup recovery sweep...')
+  try {
+    const stuckRooms = await db('game_rooms')
+      .whereIn('status', ['COUNTDOWN', 'PLAYING', 'CLAIMING'])
+      .orWhere(function () {
+        this.where('status', 'WAITING')
+          .andWhere('created_at', '<', db.raw("NOW() - INTERVAL '2 hours'"))
+      })
+
+    if (stuckRooms.length === 0) {
+      console.log('[Cleanup] No stuck rooms found. System is clean.')
+      return
+    }
+
+    console.log(`[Cleanup] Found ${stuckRooms.length} stuck rooms. Purging...`)
+    const roomIds = stuckRooms.map((room) => room.id)
+    await db.transaction(async (trx) => {
+      await trx('room_card_selections').whereIn('room_id', roomIds).del()
+      await trx('room_participants').whereIn('room_id', roomIds).del()
+      await trx('game_rooms').whereIn('id', roomIds).update({
+        status: 'WAITING',
+        called_numbers: JSON.stringify([]),
+        winning_pattern: null,
+      })
+    })
+    console.log('[Cleanup] Startup sweep complete. Stuck rooms purged.')
+  } catch (err) {
+    console.error('[Cleanup] Startup sweep failed:', err)
+  }
+}
+
+async function cleanupStaleRooms() {
+  const staleRooms = await db('game_rooms')
+    .whereIn('status', ['WAITING', 'COUNTDOWN'])
+    .andWhere('created_at', '<', db.raw("NOW() - INTERVAL '30 minutes'"))
+
+  if (staleRooms.length === 0) return
+
+  const roomIds = staleRooms.map((room) => room.id)
+  await db.transaction(async (trx) => {
+    await trx('room_card_selections').whereIn('room_id', roomIds).del()
+    await trx('room_participants').whereIn('room_id', roomIds).del()
+    await trx('game_rooms').whereIn('id', roomIds).del()
+  })
+  console.log(`[Cron] Purged ${staleRooms.length} abandoned rooms.`)
+}
+
+function startPeriodicCleanup() {
+  let cleanupRunning = false
+  setInterval(async () => {
+    if (cleanupRunning) return
+    cleanupRunning = true
+    try {
+      console.log('[Cron] Running periodic zombie room cleanup...')
+      await cleanupStaleRooms()
+    } catch (err) {
+      console.error('[Cron] Periodic cleanup failed:', err)
+    } finally {
+      cleanupRunning = false
+    }
+  }, 5 * 60 * 1000)
+}
+
+async function initializeHeavyServices() {
+  const WEBHOOK_URL = process.env.WEBHOOK_URL
+  if (WEBHOOK_URL) {
+    try {
+      await bot.telegram.setWebhook(`${WEBHOOK_URL}/telegraf/${bot.secretPathComponent()}`)
+      console.log('✅ Telegram Webhook set successfully to:', WEBHOOK_URL)
+    } catch (err) {
+      console.error('❌ Failed to set Telegram Webhook:', err)
+    }
+  } else {
+    console.error('❌ WEBHOOK_URL is not defined in environment variables!')
+  }
+
+  await performStartupCleanup()
+  startPeriodicCleanup()
+}
+
 const app = express()
 
 // --- App hardening ---
@@ -184,23 +265,18 @@ async function start() {
   }, null, 2))
   console.log('Knex Pool settings:', JSON.stringify(db.client.config.pool, null, 2))
   console.log('=================================')
-  Promise.resolve()
-    .then(() => db.migrate.latest())
-    .then(() => console.log('✅ Database migrations complete'))
-    .catch((err) => console.error('❌ MIGRATION FAILED:', err))
+  try {
+    await db.migrate.latest()
+    console.log('✅ Database migrations complete')
+  } catch (err) {
+    console.error('❌ MIGRATION FAILED:', err)
+  }
+
+  await initializeHeavyServices()
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`)
     console.log('🤖 Telegram webhook handler is ready')
-
-    const WEBHOOK_URL = process.env.WEBHOOK_URL
-    if (WEBHOOK_URL) {
-      bot.telegram.setWebhook(`${WEBHOOK_URL}/telegraf/${bot.secretPathComponent()}`)
-        .then(() => console.log('✅ Telegram Webhook set successfully to:', WEBHOOK_URL))
-        .catch((err) => console.error('❌ Failed to set Telegram Webhook:', err))
-    } else {
-      console.error('❌ WEBHOOK_URL is not defined in environment variables!')
-    }
   })
 }
 
