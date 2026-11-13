@@ -1,67 +1,54 @@
-const letters = { B: 'ቢ', I: 'አይ', N: 'ኤን', G: 'ጂ', O: 'ኦ' };
-
-function getAmharicNumber(num) {
-  const ones = ['', 'አንድ', 'ሁለት', 'ሶስት', 'አራት', 'አምስት', 'ስድስት', 'ሰባት', 'ስምንት', 'ዘጠኝ'];
-  const tens = ['', 'አስር', 'ሃያ', 'ሰላሳ', 'አርባ', 'ሃምሳ', 'ስልሳ', 'ሰባ', 'ሰማንያ', 'ዘጠና'];
-  if (num < 10) return ones[num];
-  if (num === 10) return 'አስር';
-  if (num < 20) return `አስራ ${ones[num - 10]}`;
-  if (num % 10 === 0) return tens[Math.floor(num / 10)];
-  return `${tens[Math.floor(num / 10)]} ${ones[num % 10]}`;
-}
-
-let isMuted = false;
-let voicesLoaded = false;
-let amharicVoice = null;
-
-const loadVoices = () => {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length > 0) {
-    voicesLoaded = true;
-    amharicVoice = voices.find((voice) => /am/i.test(voice.lang)) || voices[0];
-  }
-};
-
-if (typeof window !== 'undefined' && window.speechSynthesis) {
-  loadVoices();
-  if (window.speechSynthesis.onvoiceschanged !== undefined) {
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-  }
-}
-
-export const toggleMute = () => {
-  isMuted = !isMuted;
-  if (isMuted && typeof window !== 'undefined' && window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-  }
-  return isMuted;
-};
-
-export const getMuteState = () => isMuted;
-
-export const playBallCall = (ballString) => {
-  if (isMuted || typeof window === 'undefined' || !window.speechSynthesis) return;
-
-  const [letter, numberString] = ballString.split('-');
-  const number = Number.parseInt(numberString, 10);
-  if (!letters[letter] || !Number.isInteger(number) || number < 1 || number > 75) return;
-
-  const textToSpeak = `${letters[letter]} ${getAmharicNumber(number)}`;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(textToSpeak);
-  utterance.rate = 0.9;
-
-  if (!voicesLoaded) loadVoices();
-  if (amharicVoice) utterance.voice = amharicVoice;
-
-  window.speechSynthesis.speak(utterance);
-};
+let isVoiceEnabled = false;
+let isAudioUnlocked = false;
+const audioCache = {};
 
 export const unlockAudio = () => {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  if (isAudioUnlocked) return;
 
-  const utterance = new SpeechSynthesisUtterance(' ');
-  utterance.volume = 0;
-  window.speechSynthesis.speak(utterance);
+  const silentAudio = new Audio('/audio/B1.mp3');
+  silentAudio.volume = 0;
+  silentAudio.play().then(() => {
+    silentAudio.pause();
+    isAudioUnlocked = true;
+    console.log('[Audio] HTML5 Audio unlocked.');
+  }).catch((error) => console.log('[Audio] Unlock failed:', error));
+};
+
+export const toggleVoice = (enabled) => {
+  isVoiceEnabled = enabled;
+  if (!enabled) {
+    Object.values(audioCache).forEach((audio) => {
+      audio.pause();
+      audio.currentTime = 0;
+    });
+  }
+};
+
+export const playNumberAudio = (letter, number) => {
+  if (!isVoiceEnabled || !['B', 'I', 'N', 'G', 'O'].includes(letter)) return;
+
+  const numericNumber = Number(number);
+  if (!Number.isInteger(numericNumber) || numericNumber < 1 || numericNumber > 75) return;
+
+  const fileName = `${letter}${numericNumber}.mp3`;
+  const filePath = `/audio/${fileName}`;
+
+  if (!audioCache[fileName]) {
+    audioCache[fileName] = new Audio(filePath);
+  }
+
+  const audio = audioCache[fileName];
+  audio.currentTime = 0;
+  audio.play().catch((error) => {
+    if (error.name !== 'NotSupportedError') {
+      console.warn(`[Audio] Failed to play ${fileName}. Ensure the file exists in public/audio/.`, error);
+      return;
+    }
+
+    audio.src = `/audio/${letter}${numericNumber}.m4a`;
+    audio.load();
+    audio.play().catch((fallbackError) => {
+      console.warn(`[Audio] Failed to play ${fileName}. Ensure the file exists in public/audio/.`, fallbackError);
+    });
+  });
 };
