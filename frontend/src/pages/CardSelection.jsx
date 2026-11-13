@@ -190,11 +190,27 @@ export default function CardSelection() {
             >
               ← {t('back')}
             </button>
-            <div className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-1.5 shadow-inner">
-              <span aria-hidden="true" className="text-sm text-yellow-400">💰</span>
-              <span className="tabular-nums text-sm font-black text-white sm:text-base">
-                {Number(balance || 0).toFixed(2)} <span className="text-[10px] font-bold text-slate-400">ETB</span>
-              </span>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-1.5 shadow-inner">
+                <span aria-hidden="true" className="text-sm text-yellow-400">💰</span>
+                <span className="tabular-nums text-sm font-black text-white sm:text-base">
+                  {Number(balance || 0).toFixed(2)} <span className="text-[10px] font-bold text-slate-400">ETB</span>
+                </span>
+              </div>
+              <button
+                type="button"
+                aria-label="Audio mode"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-[10px] font-bold text-white shadow-[0_4px_0_rgb(51,65,85)] transition-all active:translate-y-1 active:shadow-none"
+              >
+                AM
+              </button>
+              <button
+                type="button"
+                aria-label="Sound"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-700 text-white shadow-[0_4px_0_rgb(51,65,85)] transition-all active:translate-y-1 active:shadow-none"
+              >
+                🔊
+              </button>
             </div>
           </div>
 
