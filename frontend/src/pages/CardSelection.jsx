@@ -36,7 +36,7 @@ export default function CardSelection() {
   const { balance } = useWallet();
 
   const [takenCards, setTakenCards] = useState([]);
-  const [, setPlayersCount] = useState(0);
+  const [playersCount, setPlayersCount] = useState(0);
   const [selectedCard, setSelectedCard] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState({ show: false, message: '', type: 'error' });
@@ -121,9 +121,9 @@ export default function CardSelection() {
     };
   }, [navigate, roomId, stake]);
 
-  const handleCardSelect = async () => {
+  const handleCardSelect = async (cardNumber) => {
     unlockAudio();
-    if (!selectedCard || takenCards.includes(selectedCard)) return;
+    if (!cardNumber || takenCards.includes(cardNumber) || loading) return;
 
     setLoading(true);
     let responseRoomId = roomId;
@@ -133,7 +133,7 @@ export default function CardSelection() {
         method: 'POST',
         body: JSON.stringify({
           stake: Number(stake),
-          card_number: selectedCard,
+          card_number: cardNumber,
           userId: localStorage.getItem('dbUserId'),
         }),
       });
@@ -160,7 +160,7 @@ export default function CardSelection() {
       localStorage.setItem('activeGameRoom', JSON.stringify({
         roomId: data.roomId,
         stake: Number(stake),
-        cardNumber: data.card?.id || selectedCard,
+        cardNumber: data.card?.id || cardNumber,
       }));
       navigate(`/game?roomId=${data.roomId}&stake=${stake}`);
     } catch (err) {
@@ -172,6 +172,7 @@ export default function CardSelection() {
       }
 
       showToast(err.message || t('failedToJoinRoom'));
+      setSelectedCard(null);
       setLoading(false);
     }
   };
@@ -226,9 +227,9 @@ export default function CardSelection() {
                   disabled={isDisabled}
                   aria-pressed={isSelected}
                   onClick={() => {
-                    unlockAudio();
                     setSelectedCard(cardNumber);
                     setToast({ show: false, message: '', type: 'error' });
+                    handleCardSelect(cardNumber);
                   }}
                   className={`relative flex h-7 min-w-0 touch-manipulation select-none items-center justify-center rounded-md border border-b-2 px-0.5 text-[10px] font-bold transition-all duration-100 sm:h-8 sm:text-[11px] md:h-9 md:text-xs ${
                     isSelected
@@ -286,29 +287,23 @@ export default function CardSelection() {
         </div>
 
         <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 p-3 text-center shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="relative flex h-5 w-5 items-center justify-center">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-60" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
+          {!selectedCard ? (
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 sm:text-xs">
+              Select a card to join
             </span>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200 sm:text-xs">
-              Confirm your card
-            </p>
-          </div>
-          <p className="mb-1 text-[9px] text-slate-400">
-            {selectedCard ? `Card No. ${selectedCard} selected` : 'Choose a card to join'}
-          </p>
-          <button
-            type="button"
-            disabled={!selectedCard || takenCards.includes(selectedCard) || loading}
-            onClick={handleCardSelect}
-            className="min-h-11 w-full rounded-lg border border-blue-400/40 border-b-4 border-b-blue-800 bg-gradient-to-b from-blue-500 to-blue-700 px-2 py-1 text-xs font-bold text-white shadow-[0_3px_0_rgb(30,64,175)] transition-all active:translate-y-0.5 active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
-          >
-            {loading ? t('loadingCard') : 'Join game'}
-          </button>
-          {loading && (
-            <span className="absolute bottom-1 text-[9px] text-blue-300 animate-pulse">
-              Processing...
+          ) : playersCount < 2 ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="relative flex h-8 w-8 items-center justify-center">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex h-4 w-4 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]" />
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200 sm:text-xs">
+                Waiting for players
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs font-bold uppercase tracking-wider text-yellow-400">
+              Get Ready
             </span>
           )}
         </div>
