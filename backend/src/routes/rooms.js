@@ -67,7 +67,6 @@ router.post('/join', async (req, res) => {
       if (requestedRoomId) {
         room = await trx('game_rooms')
           .where({ id: requestedRoomId, stake_amount: stake })
-          .forUpdate()
           .first()
         if (!room) throw new Error('ROOM_NOT_FOUND')
 

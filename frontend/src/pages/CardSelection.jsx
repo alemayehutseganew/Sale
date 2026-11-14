@@ -125,6 +125,9 @@ export default function CardSelection() {
     unlockAudio();
     if (!cardNumber || takenCards.includes(cardNumber) || loading) return;
 
+    const previousCard = selectedCard;
+    setSelectedCard(cardNumber);
+    setToast({ show: false, message: '', type: 'error' });
     setLoading(true);
     let responseRoomId = roomId;
 
@@ -172,7 +175,10 @@ export default function CardSelection() {
       }
 
       showToast(err.message || t('failedToJoinRoom'));
-      setSelectedCard(null);
+      setSelectedCard(previousCard);
+      if (/taken/i.test(err.message)) {
+        setTakenCards((prev) => (prev.includes(cardNumber) ? prev : [...prev, cardNumber]));
+      }
       setLoading(false);
     }
   };
@@ -226,11 +232,7 @@ export default function CardSelection() {
                   type="button"
                   disabled={isDisabled}
                   aria-pressed={isSelected}
-                  onClick={() => {
-                    setSelectedCard(cardNumber);
-                    setToast({ show: false, message: '', type: 'error' });
-                    handleCardSelect(cardNumber);
-                  }}
+                  onClick={() => handleCardSelect(cardNumber)}
                   className={`relative flex h-7 min-w-0 touch-manipulation select-none items-center justify-center rounded-md border border-b-2 px-0.5 text-[10px] font-bold transition-all duration-100 sm:h-8 sm:text-[11px] md:h-9 md:text-xs ${
                     isSelected
                       ? 'scale-[0.96] border-blue-900 bg-gradient-to-b from-blue-400 to-blue-600 text-white shadow-[inset_0_4px_8px_rgba(0,0,0,0.4)]'
