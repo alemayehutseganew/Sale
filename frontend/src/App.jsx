@@ -62,7 +62,8 @@ export default function App() {
           }
 
           // No active game, default to card selection
-          navigate('/select-card?stake=10', { replace: true })
+          const stake = new URLSearchParams(window.location.search).get('stake') || '10'
+          navigate(`/select-card?stake=${encodeURIComponent(stake)}`, { replace: true })
         }
       })
       .catch(() => {})

@@ -97,6 +97,14 @@ function getMainMenu(lang = 'en') {
   }
 }
 
+function getStakeKeyboard() {
+  return [
+    [{ text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }],
+    [{ text: '🎮 Play 50 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=50` } }],
+    [{ text: '🎮 Play 100 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=100` } }],
+  ]
+}
+
 async function registerBotCommands() {
   if (!commandRegistrationPromise) {
     commandRegistrationPromise = bot.telegram.setMyCommands([
@@ -194,9 +202,10 @@ bot.start(async (ctx) => {
       }).catch((err) => console.error('Start error:', err.message))
     }
 
-    return replyWithSupport(ctx, getT('en').choose_lang, {
+    return replyWithSupport(ctx, 'Please select your stake to play:', {
       reply_markup: {
         inline_keyboard: [
+          ...getStakeKeyboard(),
           [{ text: '🇬🇧 English', callback_data: 'lang_en' }, { text: '🇪🇹 አማርኛ', callback_data: 'lang_am' }],
           [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
         ]
@@ -267,11 +276,7 @@ bot.command('play', async (ctx) => {
   const t = getT(await getUserLanguage(ctx.from.id))
   replyWithSupport(ctx, t.play_prompt, {
     reply_markup: {
-      inline_keyboard: [
-        [{ text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }],
-        [{ text: '🎮 Play 50 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=50` } }],
-        [{ text: '🎮 Play 100 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=100` } }],
-      ]
+      inline_keyboard: getStakeKeyboard()
     }
   }).catch(() => {})
 })

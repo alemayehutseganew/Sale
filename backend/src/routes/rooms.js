@@ -25,6 +25,7 @@ router.get('/active-cards', async (req, res) => {
       .where({ stake_amount: stake })
       .whereIn('status', ['WAITING', 'COUNTDOWN', 'PLAYING', 'CLAIMING'])
       .where('created_at', '>', db.raw("NOW() - INTERVAL '2 hours'"))
+      .select('id')
     const roomIds = rooms.map((r) => r.id)
     if (roomIds.length === 0) {
       return res.json({ takenCards: [] })
@@ -77,9 +78,18 @@ router.post('/join', async (req, res) => {
         if (['PLAYING', 'CLAIMING'].includes(room.status)) {
           return { status: existing ? 'reconnected' : 'spectator', room }
         }
-        if (!existing) throw new Error('NOT_IN_ROOM')
         if (!['WAITING', 'COUNTDOWN'].includes(room.status)) {
           throw new Error('GAME_ALREADY_STARTED')
+        }
+        if (!existing) {
+          if (room.status !== 'WAITING') throw new Error('NOT_IN_ROOM')
+          const participantCount = await trx('room_participants')
+            .where({ room_id: room.id })
+            .count('* as count')
+            .first()
+          if (Number(participantCount.count) >= MAX_ROOM_PLAYERS) {
+            throw new Error('ROOM_FULL')
+          }
         }
       } else {
         const activeRoom = await trx('game_rooms')
@@ -249,6 +259,9 @@ router.post('/join', async (req, res) => {
     }
     if (err.message === 'NOT_IN_ROOM') {
       return res.status(403).json({ error: 'Join the room before changing cards.' })
+    }
+    if (err.message === 'ROOM_FULL') {
+      return res.status(409).json({ error: 'Room is full' })
     }
     res.status(500).json({ error: 'JOIN_FAILED', message: err.message })
   }
