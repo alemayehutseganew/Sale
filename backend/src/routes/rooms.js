@@ -24,6 +24,7 @@ router.get('/active-cards', async (req, res) => {
     const rooms = await db('game_rooms')
       .where({ stake_amount: stake })
       .whereIn('status', ['WAITING', 'COUNTDOWN', 'PLAYING', 'CLAIMING'])
+      .where('created_at', '>', db.raw("NOW() - INTERVAL '2 hours'"))
     const roomIds = rooms.map((r) => r.id)
     if (roomIds.length === 0) {
       return res.json({ takenCards: [] })

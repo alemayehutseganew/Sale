@@ -145,6 +145,46 @@ export default function CardSelection() {
       responseRoomId = responseRoomId || data.roomId;
 
       if (!res.ok) {
+        // If backend says we aren't a room participant, force a fresh join first
+        if (data.error === 'Join the room before selecting cards.' || data.error === 'NOT_ROOM_PARTICIPANT') {
+          const joinRes = await fetchApi('/rooms/join', {
+            method: 'POST',
+            body: JSON.stringify({
+              stake: Number(stake),
+              card_number: cardNumber,
+              userId: localStorage.getItem('dbUserId'),
+            }),
+          });
+          const joinData = await joinRes.json();
+          if (!joinRes.ok) throw new Error(joinData.error || t('failedToJoinRoom'));
+
+          responseRoomId = joinData.roomId || data.roomId;
+
+          if (joinData.status === 'reconnected' || joinData.status === 'spectator') {
+            const gameParams = new URLSearchParams({
+              roomId: joinData.roomId,
+              stake,
+              spectator: String(joinData.status === 'spectator'),
+            });
+            navigate(`/game?${gameParams.toString()}`);
+            return;
+          }
+
+          const socket = SocketService.get() || SocketService.connect();
+          socket.emit('join_room', {
+            roomId: joinData.roomId,
+            userId: localStorage.getItem('dbUserId'),
+            stake: Number(stake),
+          });
+
+          localStorage.setItem('activeGameRoom', JSON.stringify({
+            roomId: joinData.roomId,
+            stake: Number(stake),
+            cardNumber: joinData.card?.id || cardNumber,
+          }));
+          navigate(`/game?roomId=${joinData.roomId}&stake=${stake}`);
+          return;
+        }
         throw new Error(data.error || t('failedToJoinRoom'));
       }
 

@@ -5,7 +5,7 @@ const db = require('../db')
 const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/paymentService')
 const { getT } = require('./translations')
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sale-green.vercel.app/'
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://sale-green.vercel.app').replace(/\/$/, '')
 const SUPPORT_SUFFIX = '\n\nFor more support: @saleg122'
 const botTranslations = {
   en: {
@@ -85,7 +85,9 @@ function getMainMenu(lang = 'en') {
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: t.play_btn, web_app: { url: FRONTEND_URL } }],
+        [{ text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }],
+        [{ text: '🎮 Play 50 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=50` } }],
+        [{ text: '🎮 Play 100 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=100` } }],
         [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
         [{ text: t.btn_balance, callback_data: 'menu_balance' }, { text: t.btn_deposit, callback_data: 'menu_deposit' }],
         [{ text: t.btn_withdraw, callback_data: 'menu_withdraw' }, { text: t.btn_room, callback_data: 'menu_room' }],
@@ -127,8 +129,8 @@ async function sendInvite(ctx) {
     const shareText = 'Join me on GoBingo and win big! 🎰'
     const message = `🎉 Invite & Earn 5%!\n\nShare your unique link with friends. When they win a game, you get 5% of their prize!\n\n🔗 Your Link:\n${refLink}\n\nYou can withdraw your earnings once you reach 1,000 ETB!`
     const openGameButton = ctx.chat?.type === 'private'
-      ? { text: '🎮 Open Game', web_app: { url: FRONTEND_URL } }
-      : { text: '🎮 Open Game', url: FRONTEND_URL }
+      ? { text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }
+      : { text: '🎮 Play 10 ETB', url: `${FRONTEND_URL}/select-card?stake=10` }
 
     return replyWithSupport(ctx, message, {
       disable_web_page_preview: true,
@@ -183,7 +185,9 @@ bot.start(async (ctx) => {
       return replyWithSupport(ctx, 'Welcome to GoBingo! 🎰', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: '🎮 Open Game', web_app: { url: webAppUrl } }],
+            [{ text: '🎮 Play 10 ETB', web_app: { url: webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'stake=10' } }],
+            [{ text: '🎮 Play 50 ETB', web_app: { url: webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'stake=50' } }],
+            [{ text: '🎮 Play 100 ETB', web_app: { url: webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'stake=100' } }],
             [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
           ],
         },
@@ -262,7 +266,13 @@ bot.command('menu', async (ctx) => {
 bot.command('play', async (ctx) => {
   const t = getT(await getUserLanguage(ctx.from.id))
   replyWithSupport(ctx, t.play_prompt, {
-    reply_markup: { inline_keyboard: [[{ text: t.play_btn, web_app: { url: FRONTEND_URL } }]] }
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }],
+        [{ text: '🎮 Play 50 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=50` } }],
+        [{ text: '🎮 Play 100 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=100` } }],
+      ]
+    }
   }).catch(() => {})
 })
 
@@ -333,7 +343,13 @@ bot.action('menu_room', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   const t = getT(await getUserLanguage(ctx.from.id))
   replyWithSupport(ctx, t.room_prompt, {
-    reply_markup: { inline_keyboard: [[{ text: t.open_lobby, web_app: { url: FRONTEND_URL } }]] }
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }],
+        [{ text: '🎮 Play 50 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=50` } }],
+        [{ text: '🎮 Play 100 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=100` } }],
+      ]
+    }
   }).catch(() => {})
 })
 

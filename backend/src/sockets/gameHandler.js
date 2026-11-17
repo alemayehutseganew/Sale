@@ -402,6 +402,45 @@ function initGameHandler(io) {
             .first()
           : null
 
+        // Early reconnection: returning player in an active game resumes without re-entering the lobby
+        if (participant && ['PLAYING', 'COUNTDOWN', 'CLAIMING'].includes(persistedRoom.status)) {
+          let room = rooms[roomId]
+          if (!room) {
+            let calledNumbers = persistedRoom.called_numbers || []
+            if (typeof calledNumbers === 'string') calledNumbers = JSON.parse(calledNumbers)
+            if (!Array.isArray(calledNumbers)) calledNumbers = []
+            room = rooms[roomId] = {
+              id: roomId,
+              stake: Number(persistedRoom.stake_amount) || Number(stake) || 10,
+              status: persistedRoom.status,
+              players: {},
+              calledNumbers: new Set(calledNumbers.map(Number).filter(Number.isFinite)),
+              latestNumber:
+                calledNumbers.length > 0
+                  ? getBallData(calledNumbers[calledNumbers.length - 1])
+                  : null,
+              timers: {}
+            }
+          }
+          room.players[socket.id] = { socketId: socket.id, userId: user.id }
+          const selections = await db('room_card_selections')
+            .where({ room_id: roomId, user_id: user.id })
+          socket.emit('my_cards', {
+            cards: selections.map((selection) => ({
+              id: selection.card_id,
+              matrix: typeof selection.card === 'string' ? JSON.parse(selection.card) : selection.card,
+            })),
+          })
+          const playerCount = await getPlayerCount(roomId)
+          socket.emit('sync_game_state', {
+            calledNumbers: Array.from(room.calledNumbers),
+            currentBall: room.latestNumber,
+            status: room.status,
+            players: playerCount,
+          })
+          return
+        }
+
         if (spectator && persistedRoom.status === 'WAITING' && (!participant || !cardSelection)) {
           socket.emit('next_game_ready', {
             roomId,

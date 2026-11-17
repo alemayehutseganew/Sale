@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Lobby from './pages/Lobby'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import CardSelection from './pages/CardSelection'
 import GameScreen from './pages/GameScreen'
 import Wallet from './pages/Wallet'
@@ -21,6 +20,8 @@ import AdminPayments from './admin/AdminPayments'
 
 
 export default function App() {
+  const navigate = useNavigate()
+
   useEffect(() => {
     const tg = window.Telegram?.WebApp
     tg?.ready()
@@ -44,6 +45,24 @@ export default function App() {
           localStorage.setItem('walletBalance', data.user.wallet_balance)
           SocketService.connect(data.token)
           window.dispatchEvent(new Event('wallet-refresh'))
+
+          // Auto-resume: if there's an active game in localStorage, go straight to game screen
+          const activeRoomData = localStorage.getItem('activeGameRoom')
+          if (activeRoomData) {
+            try {
+              const { roomId, stake } = JSON.parse(activeRoomData)
+              if (roomId && stake) {
+                console.log('[App] Found active game in storage. Auto-resuming to game screen.')
+                navigate(`/game?roomId=${roomId}&stake=${stake}`, { replace: true })
+                return
+              }
+            } catch (err) {
+              console.error('[App] Failed to parse active game data', err)
+            }
+          }
+
+          // No active game, default to card selection
+          navigate('/select-card?stake=10', { replace: true })
         }
       })
       .catch(() => {})
@@ -70,7 +89,7 @@ export default function App() {
       <WalletProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Lobby />} />
+            <Route path="/" element={<Navigate to="/select-card?stake=10" replace />} />
             <Route path="/card-selection" element={<CardSelection />} />
             <Route path="/select-card" element={<CardSelection />} />
             <Route path="/select-cards" element={<CardSelection />} />

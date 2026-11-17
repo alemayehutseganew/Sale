@@ -236,7 +236,8 @@ const GameScreenContent = () => {
       }
     });
     socket.on('game_over', (data) => {
-      setTimeout(() => navigate(`/select-card?stake=${stake}`), 3000);
+      localStorage.removeItem('activeGameRoom')
+      setTimeout(() => navigate(`/select-card?stake=${stake}`), 3000)
       const myId = String(userId);
       const isWinner = data.winnerIds?.some(id => String(id) === myId);
       if (isSpectator) {
@@ -280,6 +281,7 @@ const GameScreenContent = () => {
       navigate(`/select-card?stake=${data.stake || stake}`);
     });
     socket.on('room_reset', (data) => {
+      localStorage.removeItem('activeGameRoom')
       setGameResult(null);
       setSpectatorNumbers([]);
       setSpectatorBall(null);
@@ -292,6 +294,16 @@ const GameScreenContent = () => {
     socket.on('bingo_invalid', (data) => {
       setBingoMessage({ success: false, message: data.message });
       setTimeout(() => setBingoMessage(null), 4000);
+    });
+
+    // Handle errors from backend: room not found, game already ended, etc.
+    socket.on('error', (err) => {
+      const msg = String(err?.message || err || '')
+      if (msg === 'Room not found' || msg.includes('ended') || msg.includes('ENDED') || msg.includes('ROOM_NOT_FOUND')) {
+        console.log('[Game] Active game no longer exists. Redirecting to card selection.')
+        localStorage.removeItem('activeGameRoom')
+        navigate(`/select-card?stake=${stake}`, { replace: true })
+      }
     });
 
     socket.on('connect', handleJoin);
@@ -316,6 +328,7 @@ const GameScreenContent = () => {
       socket.off('room_reset');
       socket.off('bingo_result');
       socket.off('bingo_invalid');
+      socket.off('error');
     };
   }, [socket, roomId, userId, stake, isSpectator, navigate]);
 
