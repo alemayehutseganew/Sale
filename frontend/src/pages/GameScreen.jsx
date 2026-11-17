@@ -83,7 +83,6 @@ const GameScreenContent = () => {
   const { changeLanguage } = useLanguage();
   const { balance } = useWallet();
   const translationRef = useRef(t);
-  const noWinnerRoundRef = useRef(false);
   useEffect(() => {
     translationRef.current = t;
   }, [t]);
@@ -237,6 +236,7 @@ const GameScreenContent = () => {
       }
     });
     socket.on('game_over', (data) => {
+      setTimeout(() => navigate(`/select-card?stake=${stake}`), 3000);
       const myId = String(userId);
       const isWinner = data.winnerIds?.some(id => String(id) === myId);
       if (isSpectator) {
@@ -253,11 +253,9 @@ const GameScreenContent = () => {
       } else {
         setGameResult({ type: 'loss', title: translate('gameOver'), message: translate('winnerIs', { name: data.winnerName || translate('player') }) });
       }
-      setTimeout(() => { setGameResult(null); navigate('/'); }, 5000);
     });
     socket.on('game_ended_for_spectators', (data) => {
       if (data?.noWinner) {
-        noWinnerRoundRef.current = true;
         setGameResult({
           type: 'loss',
           title: translate('gameOver'),
@@ -282,7 +280,6 @@ const GameScreenContent = () => {
       navigate(`/select-card?stake=${data.stake || stake}`);
     });
     socket.on('room_reset', (data) => {
-      if (!isSpectator && !noWinnerRoundRef.current) return
       setGameResult(null);
       setSpectatorNumbers([]);
       setSpectatorBall(null);

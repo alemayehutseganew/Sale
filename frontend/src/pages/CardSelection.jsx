@@ -148,8 +148,13 @@ export default function CardSelection() {
         throw new Error(data.error || t('failedToJoinRoom'));
       }
 
-      if (data.status === 'spectator') {
-        navigate(`/game?roomId=${data.roomId}&stake=${stake}&spectator=true`);
+      if (data.status === 'reconnected' || data.status === 'spectator') {
+        const gameParams = new URLSearchParams({
+          roomId: data.roomId,
+          stake,
+          spectator: String(data.status === 'spectator'),
+        });
+        navigate(`/game?${gameParams.toString()}`);
         return;
       }
 

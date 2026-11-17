@@ -73,6 +73,9 @@ router.post('/join', async (req, res) => {
         existing = await trx('room_participants')
           .where({ room_id: room.id, user_id: user.id })
           .first()
+        if (['PLAYING', 'CLAIMING'].includes(room.status)) {
+          return { status: existing ? 'reconnected' : 'spectator', room }
+        }
         if (!existing) throw new Error('NOT_IN_ROOM')
         if (!['WAITING', 'COUNTDOWN'].includes(room.status)) {
           throw new Error('GAME_ALREADY_STARTED')
@@ -90,6 +93,9 @@ router.post('/join', async (req, res) => {
             .where({ room_id: activeRoom.id, user_id: user.id })
             .first()
           if (!activeParticipant) return { status: 'spectator', room: activeRoom }
+          if (['PLAYING', 'CLAIMING'].includes(activeRoom.status)) {
+            return { status: 'reconnected', room: activeRoom }
+          }
           if (activeRoom.status !== 'COUNTDOWN') throw new Error('GAME_ALREADY_STARTED')
           room = activeRoom
           existing = activeParticipant
@@ -204,6 +210,14 @@ router.post('/join', async (req, res) => {
          stake: result.room.stake_amount,
          message: 'Game already in progress',
        })
+    }
+
+    if (result.status === 'reconnected') {
+      return res.json({
+        status: 'reconnected',
+        roomId: result.room.id,
+        stake: result.room.stake_amount,
+      })
     }
 
     const io = req.app.get('io')
