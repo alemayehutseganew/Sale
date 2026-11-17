@@ -1,6 +1,7 @@
 let isVoiceEnabled = true;
 let isAudioUnlocked = false;
 const audioCache = {};
+const MAX_CACHE_SIZE = 10;
 
 export const unlockAudio = () => {
   if (isAudioUnlocked) return;
@@ -33,31 +34,6 @@ export const toggleVoice = (enabled) => {
   }
 };
 
-export const preloadAudio = async () => {
-  const letters = ['B', 'I', 'N', 'G', 'O'];
-  const ranges = { B: [1, 15], I: [16, 30], N: [31, 45], G: [46, 60], O: [61, 75] };
-  const missingFiles = [];
-
-  for (const letter of letters) {
-    const [start, end] = ranges[letter];
-    for (let number = start; number <= end; number += 1) {
-      const fileName = `${letter}${number}.m4a`;
-      try {
-        const response = await fetch(`/audio/${fileName}`, { method: 'HEAD' });
-        if (!response.ok) missingFiles.push(fileName);
-      } catch {
-        missingFiles.push(fileName);
-      }
-    }
-  }
-
-  if (missingFiles.length > 0) {
-    console.error('[Audio] ❌ MISSING OR UNREACHABLE FILES:', missingFiles.join(', '));
-  } else {
-    console.log('[Audio] ✅ All 75 audio files verified and cached in HTTP layer.');
-  }
-};
-
 export const playNumberAudio = (letter, number) => {
   if (!isVoiceEnabled || !isAudioUnlocked || !['B', 'I', 'N', 'G', 'O'].includes(letter)) return;
 
@@ -77,7 +53,22 @@ export const playNumberAudio = (letter, number) => {
     window.speechSynthesis.cancel();
   }
 
-  if (!audioCache[fileName]) audioCache[fileName] = new Audio(filePath);
+  if (!audioCache[fileName]) {
+    while (Object.keys(audioCache).length >= MAX_CACHE_SIZE) {
+      const oldestKey = Object.keys(audioCache)[0];
+      const oldestAudio = audioCache[oldestKey];
+      oldestAudio.pause();
+      oldestAudio.currentTime = 0;
+      oldestAudio.removeAttribute('src');
+      oldestAudio.load();
+      delete audioCache[oldestKey];
+    }
+    audioCache[fileName] = new Audio(filePath);
+  } else {
+    const cachedAudio = audioCache[fileName];
+    delete audioCache[fileName];
+    audioCache[fileName] = cachedAudio;
+  }
 
   const audio = audioCache[fileName];
   audio.currentTime = 0;

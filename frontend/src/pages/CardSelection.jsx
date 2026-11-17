@@ -221,7 +221,7 @@ export default function CardSelection() {
             </div>
           </div>
 
-          <div className="mx-auto grid max-w-lg grid-cols-7 gap-1 p-2 pb-4 sm:grid-cols-9 md:grid-cols-11">
+          <div className="mx-auto grid max-w-lg grid-cols-7 gap-1 p-2 pb-4 transform-gpu will-change-transform sm:grid-cols-9 md:grid-cols-11">
             {Array.from({ length: 400 }, (_, i) => i + 1).map((cardNumber) => {
               const isSelected = selectedCard === cardNumber;
               const isTaken = takenCards.includes(cardNumber) && !isSelected;

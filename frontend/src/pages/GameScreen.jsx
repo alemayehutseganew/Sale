@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../LanguageContext';
 import SocketService from '../services/socket';
 import { fetchApi } from '../services/api';
-import { toggleVoice, playNumberAudio, unlockAudio, preloadAudio } from '../utils/bingoSounds';
+import { toggleVoice, playNumberAudio, unlockAudio } from '../utils/bingoSounds';
 import { useWallet } from '../WalletContext';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const serverMessageKeys = {
   'You do not have enough balance. Please deposit funds.': 'insufficientFunds',
@@ -70,7 +71,7 @@ const formatTime = (seconds) => {
   return `${minutes}:${remainingSeconds}`;
 };
 
-const GameScreen = () => {
+const GameScreenContent = () => {
   const socket = SocketService.get() || SocketService.connect()
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -105,16 +106,13 @@ const GameScreen = () => {
   const [readyPlayers, setReadyPlayers] = useState(0);
   const [countdown, setCountdown] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
-  const isSpectator = spectatorFromUrl;
+  const [gameStatus, setGameStatus] = useState(null);
+  const [isSpectator, setIsSpectator] = useState(spectatorFromUrl);
   const [spectatorNumbers, setSpectatorNumbers] = useState([]);
   const [spectatorBall, setSpectatorBall] = useState(null);
   const [bingoMessage, setBingoMessage] = useState(null);
   const [gameResult, setGameResult] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
-
-  useEffect(() => {
-    preloadAudio();
-  }, []);
 
   useEffect(() => {
     const handleFirstTap = () => {
@@ -167,6 +165,28 @@ const GameScreen = () => {
         return;
       }
     });
+    socket.on('sync_game_state', (data) => {
+      console.log('[SOCKET] Synced game state:', data);
+      if (Array.isArray(data.calledNumbers)) {
+        setCalledNumbers(data.calledNumbers);
+        setCalledHistory(data.calledNumbers.slice(-5).map((number) => ({
+          number,
+          letter: getLetterForNumber(Number(number)),
+        })));
+        setSpectatorNumbers(data.calledNumbers);
+      }
+      if (data.currentBall !== undefined) {
+        setCurrentBall(data.currentBall);
+        setSpectatorBall(data.currentBall);
+      }
+      if (data.status) {
+        setGameStatus(data.status);
+        setGameStarted(['PLAYING', 'CLAIMING'].includes(data.status));
+        if (data.status !== 'COUNTDOWN') setCountdown(null);
+        setIsSpectator(false);
+      }
+      if (Number.isFinite(Number(data.players))) setPlayerCount(Number(data.players));
+    });
     socket.on('spectator_sync', (data) => {
       setSpectatorNumbers(data.calledNumbers || []);
       setSpectatorBall(data.currentBall || null);
@@ -186,7 +206,10 @@ const GameScreen = () => {
       setCountdown(Number.isFinite(parsedTimeLeft) ? parsedTimeLeft : null);
     });
     socket.on('my_cards', (data) => {
-      if (!isSpectator && data.cards && data.cards.length > 0) setCardsData(data.cards);
+      if (data.cards && data.cards.length > 0) {
+        setCardsData(data.cards);
+        setIsSpectator(false);
+      }
     });
     socket.on('game_started', () => {
       setCountdown(null);
@@ -274,14 +297,15 @@ const GameScreen = () => {
       setTimeout(() => setBingoMessage(null), 4000);
     });
 
+    socket.on('connect', handleJoin);
     if (socket.connected) handleJoin();
-    else socket.on('connect', handleJoin);
 
     return () => {
       socket.off('connect', handleJoin);
       socket.off('room_update');
       socket.off('players_updated');
       socket.off('game_in_progress');
+      socket.off('sync_game_state');
       socket.off('spectator_sync');
       socket.off('insufficient_funds');
       socket.off('game_aborted');
@@ -297,6 +321,22 @@ const GameScreen = () => {
       socket.off('bingo_invalid');
     };
   }, [socket, roomId, userId, stake, isSpectator, navigate]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' || !userId) return;
+
+      console.log('[App] Resumed from background. Reconnecting socket...');
+      if (!socket.connected) {
+        socket.connect();
+        return;
+      }
+      socket.emit('join_room', { roomId, userId, stake, spectator: isSpectator });
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [socket, roomId, userId, stake, isSpectator]);
 
   useEffect(() => {
     if (isSpectator || gameStarted) return;
@@ -483,7 +523,7 @@ const GameScreen = () => {
 
   if (!gameStarted) {
     const selectedCard = cardsData[0];
-    const cardChangeLocked = gameStarted || countdown === 0;
+    const cardChangeLocked = gameStarted || countdown === 0 || ['PLAYING', 'CLAIMING'].includes(gameStatus);
 
     return (
       <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#0f172a] text-white">
@@ -740,4 +780,10 @@ const GameScreen = () => {
   );
 };
 
-export default GameScreen;
+export default function GameScreen() {
+  return (
+    <ErrorBoundary>
+      <GameScreenContent />
+    </ErrorBoundary>
+  );
+}

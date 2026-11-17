@@ -441,7 +441,6 @@ function initGameHandler(io) {
           })
         }
 
-        // Reconnecting during an active round never restores player status.
         if (['PLAYING', 'CLAIMING', 'COUNTDOWN'].includes(persistedRoom.status)) {
           const room = rooms[roomId]
           let persistedCalledNumbers = persistedRoom.called_numbers || []
@@ -457,6 +456,27 @@ function initGameHandler(io) {
           room.latestNumber = calledNumbers.length
             ? getBallData(calledNumbers[calledNumbers.length - 1])
             : null
+
+          if (participant) {
+            room.players[socket.id] = { socketId: socket.id, userId: user.id }
+            const selections = await db('room_card_selections')
+              .where({ room_id: roomId, user_id: user.id })
+            socket.emit('my_cards', {
+              cards: selections.map((selection) => ({
+                id: selection.card_id,
+                matrix: typeof selection.card === 'string' ? JSON.parse(selection.card) : selection.card,
+              })),
+            })
+            const playerCount = await getPlayerCount(roomId)
+            socket.emit('sync_game_state', {
+              calledNumbers,
+              currentBall: room.latestNumber,
+              status: room.status,
+              players: playerCount,
+            })
+            return
+          }
+
           const playerCount = await emitCurrentRoomState(socket, roomId, room)
           socket.emit('game_in_progress', {
             message: 'A game is in progress. Please wait for the next round.',
