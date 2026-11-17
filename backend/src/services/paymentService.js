@@ -142,15 +142,35 @@ function parseTelebirrPaymentDate(value) {
   return localTime - (3 * 60 * 60 * 1000)
 }
 
+function extractTelebirrReceipt(smsText) {
+  if (!smsText) return { reference: null, url: null }
+
+  const urlMatch = smsText.match(/https:\/\/transactioninfo\.ethiotelecom\.et\/receipt\/([A-Z0-9]{6,20})\b/i)
+  if (urlMatch) return { reference: urlMatch[1].toUpperCase(), url: urlMatch[0] }
+
+  const englishMatch = smsText.match(/(?:transaction number is|transaction number|reference)[\s:]*([A-Z0-9]{6,20})\b/i)
+  if (englishMatch) return { reference: englishMatch[1].toUpperCase(), url: null }
+
+  const amharicMatch = smsText.match(/ቁጥርዎ\s+([A-Z0-9]{6,20})\s+ነ(?:ዉ|ው)/i)
+  if (amharicMatch) return { reference: amharicMatch[1].toUpperCase(), url: null }
+
+  const fallbackMatch = smsText.match(/\b([A-Z0-9]{10})\b/i)
+  if (fallbackMatch) return { reference: fallbackMatch[1].toUpperCase(), url: null }
+
+  return { reference: null, url: null }
+}
+
 function parseTelebirrSMS(smsText) {
   if (!smsText) return null
 
-  const idMatch = smsText.match(/(?:transaction number is|transaction number|reference)[\s:]*([A-Z0-9]{6,20})\b/i)
-  const receiptUrlMatch = smsText.match(/transactioninfo\.ethiotelecom\.et\/receipt\/([A-Z0-9]{6,20})\b/i)
-  const transactionId = (idMatch?.[1] || receiptUrlMatch?.[1] || '').toUpperCase() || null
+  const { reference: transactionId } = extractTelebirrReceipt(smsText)
 
-  const amountMatch = smsText.match(/(?:paid|transferred)\s+ETB\s+([0-9.]+)/i)
-  const amount = amountMatch ? parseFloat(amountMatch[1]) : null
+  const englishAmountMatch = smsText.match(/ETB\s*([\d,]+(?:\.\d{1,2})?)/i)
+  const amharicAmountMatch = englishAmountMatch
+    ? null
+    : smsText.match(/([\d,]+(?:\.\d{1,2})?)\s*ብር/)
+  const amountMatch = englishAmountMatch || amharicAmountMatch
+  const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : null
 
   const payerMatch = smsText.match(/Dear\s+([A-Za-z\s]+)/i)
   const payerName = payerMatch ? payerMatch[1].trim() : null
@@ -159,7 +179,7 @@ function parseTelebirrSMS(smsText) {
   const receiverName = receiverMatch ? receiverMatch[1].trim() : null
   const receiverNumber = receiverMatch ? receiverMatch[2] : null
 
-  if (!transactionId || !amount || !receiverName) {
+  if (!transactionId || !Number.isFinite(amount) || amount <= 0) {
     return null
   }
 
@@ -382,6 +402,7 @@ module.exports = {
   verifyTelebirrReceipt,
   creditVerifiedDeposit,
   processDeposit,
+  extractTelebirrReceipt,
   parseTelebirrSMS,
   isAccountMatch,
 }
