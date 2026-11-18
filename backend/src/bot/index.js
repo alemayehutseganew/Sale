@@ -4,53 +4,43 @@ const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/payment
 const { getT } = require('./translations')
 
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://sale-green.vercel.app').replace(/\/+$/, '')
-const SUPPORT_SUFFIX = '\n\nFor more support: @saleg122'
+const SUPPORT_SUFFIX = '\n\n💬 <i>For more support: @saleg122</i>'
 const botTranslations = {
   en: {
-    helpMessage: `✅ Game Card
-1. To start the game, select a Bingo card from the 1-400 card selection board.
-2. Inactive numbers on the board mean the card has already been selected by another player.
-3. When you select a card, it will show the numbers at the bottom.
-4. When the countdown timer reaches zero, you will automatically enter the game.
-
-✅ How the game is played
-1. After entering the game, you will find your selected card on the right side.
-2. When the game starts, the system will randomly call numbers from 1 to 75.
-3. From the numbers called by the system, select and mark (shade) the ones that match your card.
-
-🏆 Ways to win
-1. Based on the marked numbers on your card:
-• Complete a horizontal or vertical line.
-• Complete a diagonal line.
-• Mark all four corners.
-
-✅ If there is more than one winner, the prize pool is split among them.
-
-For more support: @saleg122`,
-    alreadyRegistered: '✅ You are already registered.',
+    selectLanguage: '🌐 <b>Please select your language:</b>\n\n<i>Choose your preferred language to continue.</i>',
+    mainMenu: '🏠 <b>Main Menu</b>\n\n<i>Select an option below to continue playing.</i>',
+    launchPrompt: '🎮 <b>Ready to play?</b>\n\nSelect a stake amount below to enter the game.',
+    balance: '💰 <b>Your Current Balance</b>\n\n<code>ETB {{amount}}</code>',
+    userNotFound: '⚠️ <b>User Not Found</b>\n\nPlease open the Mini App first to register.',
+    balanceFailed: '⚠️ <b>Balance Unavailable</b>\n\nPlease try again in a moment.',
+    helpMessage: '<b>📖 Game Rules &amp; Help</b>\n\n1️⃣ Open the Mini App.\n2️⃣ Select a stake.\n3️⃣ Choose a card (1-400).\n4️⃣ Wait for the countdown.\n5️⃣ Tap numbers when called.\n6️⃣ Complete a line and press <b>BINGO!</b>\n\n<i>Good luck!</i>',
+    depositInstructions: '💳 <b>Deposit Funds</b>\n\n👤 Name: <b>Saleamlak misganaw dagnaw</b>\n📱 Telebirr: <code>0991179163</code>\n\n1️⃣ Open your Telebirr app.\n2️⃣ Send money to the number above.\n3️⃣ Copy the SMS you receive.\n\n👇 <b>Paste the full SMS here:</b>',
+    withdrawPrompt: '💸 <b>Withdraw Funds</b>\n\nEnter the amount you want to withdraw (Minimum 100 ETB):\n\n<i>Your request will be processed by an admin.</i>',
+    withdrawalPending: '⏳ <b>Withdrawal Requested</b>\n\nYour request for <code>ETB {{amount}}</code> is pending admin approval.',
+    depositSubmitted: '✅ <b>Receipt Verified!</b>\n\nYour deposit of <code>ETB {{amount}}</code> has been submitted for admin approval.',
+    inviteEarn: '🎉 <b>Invite &amp; Earn 5%</b>\n\nShare your unique link with friends. When they win a game, you get 5% of their prize!\n\n🔗 <b>Your Link:</b>\n<code>{{link}}</code>\n\n💰 <i>Withdraw your earnings once you reach 1,000 ETB!</i>',
+    inviteMissingUser: '⚠️ <b>User Not Found</b>\n\nPlease open the Mini App first to register.',
+    inviteFailed: '⚠️ <b>Invite Link Unavailable</b>\n\nPlease try again later.',
+    alreadyRegistered: '✅ <b>You are already registered.</b>',
+    languageSet: '✅ <b>Language updated.</b>',
   },
   am: {
-    helpMessage: `✅ መጫወቻ ካርድ
-1. ጨዋታውን ለመጀመር ከ1-400 የካርድ መምረጫ ቦርድ ውስጥ አንድ የመጫወቻ ካርድ (ካርቴላ) ይምረጡ።
-2. የካርድ መምረጫ ቦርድ ላይ Inactive ቁጥሮች የሚያሳዩት መጫወቻ ካርዱ (ካርቴላው) በሌላ ተጫዋች መመረጡን ነው።
-3. የመጫወቻ ካርዱን (ካርቴላውን) ሲመርጡት ከታች የሚይዛቸውን ቁጥሮች ያሳያል።
-4. ወደ ጨዋታው ለመግባት ለምዝገባ የተሰጠው ሰኮንድ ዜሮ ሲሆን ቀጥታ ወደ ጨዋታ ያስገባል።
-
-✅ ጨዋታ እንዴት ይካሄዳል
-1. ወደ ጨዋታው ከገቡ በኋላ በመረጡት የመጫወቻ ካርድ (ካርቴላ) በቀኝ በኩል ያገኙታል።
-2. ጨዋታው ሲጀምር ሲስተሙ ከ1 እስከ 75 ያሉ ቁጥሮችን Randomly መጥራት ይጀምራል።
-3. ሲስተሙ ከሚጠራቸው ቁጥሮች ውስጥ በራስዎ የመጫወቻ ካርድ (ካርቴላ) ላይ ካሉ በመምረጥ ያጥቁሩ።
-
-🏆 አሸናፊ የሚሆኑባቸው መንገዶች
-1. መጫወቻ ካርድ (ካርቴላ) ላይ የተጠቆሩት ቁጥሮች፦
-• ወደጎን ወይም ወደታች መስመር ከሰሩ
-• ወደሁለቱም አግዳሚ (Diagonal) መስመር ከሰሩ
-• አራቱ ማእዘናት (ኮርነር) ከተጠሩ አሸናፊ ይሆናሉ።
-
-✅ ከአንድ በላይ አሸናፊ ካለ ደራሽ ገንዘቡን ይከፋፈላሉ።
-
-ለተጨማሪ ድጋፍ፦ @saleg122`,
-    alreadyRegistered: '✅ አስቀድመው ተመዝግበዋል።',
+    selectLanguage: '🌐 <b>እባክዎ ቋንቋዎን ይምረጡ:</b>\n\n<i>ለመቀጠል የሚመርጡትን ቋንቋ ይምረጡ።</i>',
+    mainMenu: '🏠 <b>ዋና ማውጫ</b>\n\n<i>መጫወትዎን ለመቀጠል ከታች አማራጭ ይምረጡ።</i>',
+    launchPrompt: '🎮 <b>ለመጫወት ዝግጁ ነዎት?</b>\n\nወደ ጨዋታው ለመግባት ከታች የውርርድ መጠን ይምረጡ።',
+    balance: '💰 <b>የአሁኑ ቀሪ ሂሳብዎ</b>\n\n<code>{{amount}} ብር</code>',
+    userNotFound: '⚠️ <b>ተጠቃሚው አልተገኘም</b>\n\nለመመዝገብ እባክዎ መጀመሪያ ሚኒ አፑን ይክፈቱ።',
+    balanceFailed: '⚠️ <b>ቀሪ ሂሳቡን ማሳየት አልተቻለም</b>\n\nእባክዎ ከጥቂት ጊዜ በኋላ እንደገና ይሞክሩ።',
+    helpMessage: '<b>📖 የጨዋታ ህጎች እና እርዳታ</b>\n\n1️⃣ ሚኒ አፑን ይክፈቱ።\n2️⃣ ውርርድ ይምረጡ።\n3️⃣ ካርድ (1-400) ይምረጡ።\n4️⃣ ቆጠራውን ይጠብቁ።\n5️⃣ ቁጥሮች ሲጠሩ ይምረጡ።\n6️⃣ መስመር ሲሞሉ <b>BINGO!</b> ይጫኑ።\n\n<i>መልካም ዕድል!</i>',
+    depositInstructions: '💳 <b>ገንዘብ ማስገባት</b>\n\n👤 ስም: <b>Saleamlak misganaw dagnaw</b>\n📱 ቴሌብር: <code>0991179163</code>\n\n1️⃣ የቴሌብር አፕዎን ይክፈቱ።\n2️⃣ ከላይ ወዳለው ቁጥር ገንዘብ ይላኩ።\n3️⃣ የደረሰዎትን ኤስኤምኤስ ይቅዱ።\n\n👇 <b>ሙሉውን ኤስኤምኤስ እዚህ ይለጥፉ:</b>',
+    withdrawPrompt: '💸 <b>ገንዘብ ማውጣት</b>\n\nማውጣት የሚፈልጉትን መጠን ያስገቡ (ቢያንስ 100 ብር):\n\n<i>ጥያቄዎ በአስተዳዳሪ ይስተናገዳል።</i>',
+    withdrawalPending: '⏳ <b>የማውጣት ጥያቄ ተልኳል</b>\n\nየ<code>{{amount}} ብር</code> ጥያቄዎ የአስተዳዳሪ ፈቃድ እየጠበቀ ነው።',
+    depositSubmitted: '✅ <b>ደረሰኙ ተረጋግጧል!</b>\n\nየ<code>{{amount}} ብር</code> ተቀማጭዎ ለአስተዳዳሪ ፈቃድ ተልኳል።',
+    inviteEarn: '🎉 <b>ይጋብዙ እና 5% ያግኙ</b>\n\nልዩ የግብዣ አገናኝዎን ለጓደኞችዎ ያጋሩ። እነሱ ሲያሸንፉ ከሽልማታቸው 5% ያገኛሉ!\n\n🔗 <b>የእርስዎ አገናኝ:</b>\n<code>{{link}}</code>\n\n💰 <i>ገቢዎ 1,000 ብር ሲደርስ ማውጣት ይችላሉ!</i>',
+    inviteMissingUser: '⚠️ <b>ተጠቃሚው አልተገኘም</b>\n\nለመመዝገብ እባክዎ መጀመሪያ ሚኒ አፑን ይክፈቱ።',
+    inviteFailed: '⚠️ <b>የግብዣ አገናኙን ማዘጋጀት አልተቻለም</b>\n\nእባክዎ ቆይተው እንደገና ይሞክሩ።',
+    alreadyRegistered: '✅ <b>አስቀድመው ተመዝግበዋል።</b>',
+    languageSet: '✅ <b>ቋንቋው ተቀይሯል።</b>',
   },
 }
 const userStates = {}
@@ -64,8 +54,25 @@ bot.catch((err, ctx) => {
 })
 
 function replyWithSupport(ctx, text, options) {
-  const message = `${text}${SUPPORT_SUFFIX}`
-  return options ? ctx.reply(message, options) : ctx.reply(message)
+  const formattedText = /<\/?(?:b|i|code)\b/i.test(text)
+    ? text
+    : `<b>${escapeHtml(text)}</b>`
+  const message = `${formattedText}${SUPPORT_SUFFIX}`
+  return ctx.reply(message, { ...options, parse_mode: 'HTML' })
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+  })[character])
+}
+
+function botText(lang, key, values = {}) {
+  const translations = botTranslations[lang] || botTranslations.en
+  return translations[key].replace(/\{\{(\w+)\}\}/g, (_, name) => escapeHtml(values[name] ?? ''))
 }
 
 async function getUserLanguage(telegramId) {
@@ -81,30 +88,41 @@ async function getUserLanguage(telegramId) {
 function getMainMenu(lang = 'en') {
   const t = getT(lang)
   return {
+    parse_mode: 'HTML',
     reply_markup: {
       inline_keyboard: [
-        ...getStakeKeyboard(),
-        [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
+        ...getStakeButtons(FRONTEND_URL),
         [{ text: t.btn_balance, callback_data: 'menu_balance' }, { text: t.btn_deposit, callback_data: 'menu_deposit' }],
-        [{ text: t.btn_withdraw, callback_data: 'menu_withdraw' }, { text: t.btn_room, callback_data: 'menu_room' }],
-        [{ text: t.btn_help, callback_data: 'menu_help' }],
+        [{ text: t.btn_withdraw, callback_data: 'menu_withdraw' }, { text: t.btn_help, callback_data: 'menu_help' }],
+        [{ text: t.btn_room, callback_data: 'menu_room' }],
+        [{ text: '👥 Invite Friends', callback_data: 'show_invite' }],
       ]
     }
   }
 }
 
-function getStakeUrl(stake, referral) {
-  const url = new URL(`${FRONTEND_URL}/select-card`)
+function getStakeUrl(stake, referral, frontendUrl = FRONTEND_URL) {
+  const url = new URL(`${frontendUrl.replace(/\/+$/, '')}/select-card`)
   url.searchParams.set('stake', String(stake))
   if (referral) url.searchParams.set('ref', referral)
   return url.toString()
 }
 
+function getStakeButtons(frontendUrl = FRONTEND_URL, referral, useWebApp = true) {
+  const button = (stake) => {
+    const link = getStakeUrl(stake, referral, frontendUrl)
+    return useWebApp
+      ? { text: `🎮 Play ${stake} ETB`, web_app: { url: link } }
+      : { text: `🎮 Play ${stake} ETB`, url: link }
+  }
+  return [
+    [button(10), button(50)],
+    [button(100)],
+  ]
+}
+
 function getStakeKeyboard(referral) {
-  return [10, 50, 100].map((stake) => [{
-    text: `🎮 Play ${stake} ETB`,
-    web_app: { url: getStakeUrl(stake, referral) },
-  }])
+  return getStakeButtons(FRONTEND_URL, referral)
 }
 
 async function registerBotCommands() {
@@ -129,18 +147,17 @@ registerBotCommands().catch((err) => {
 })
 
 async function sendInvite(ctx) {
+  const lang = await getUserLanguage(ctx.from.id)
   try {
     const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-    if (!user) return replyWithSupport(ctx, 'Please open the Mini App first to register.')
+    if (!user) return replyWithSupport(ctx, botText(lang, 'inviteMissingUser'))
 
     const refId = user.username || user.telegram_id
     const botUsername = ctx.botInfo?.username || await getBotUsername()
     const refLink = `https://t.me/${botUsername}?start=REF_${encodeURIComponent(String(refId))}`
     const shareText = 'Join me on GoBingo and win big! 🎰'
-    const message = `🎉 Invite & Earn 5%!\n\nShare your unique link with friends. When they win a game, you get 5% of their prize!\n\n🔗 Your Link:\n${refLink}\n\nYou can withdraw your earnings once you reach 1,000 ETB!`
-    const openGameButton = ctx.chat?.type === 'private'
-      ? { text: '🎮 Play 10 ETB', web_app: { url: getStakeUrl(10) } }
-      : { text: '🎮 Play 10 ETB', url: getStakeUrl(10) }
+    const message = botText(lang, 'inviteEarn', { link: refLink })
+    const isPrivate = ctx.chat?.type === 'private'
 
     return replyWithSupport(ctx, message, {
       disable_web_page_preview: true,
@@ -150,13 +167,13 @@ async function sendInvite(ctx) {
             text: '📢 Share to Group/Channel',
             url: `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`,
           }],
-          [openGameButton],
+          ...getStakeButtons(FRONTEND_URL, undefined, isPrivate),
         ],
       },
     })
   } catch (err) {
     console.error('Invite command error:', err)
-    return replyWithSupport(ctx, '❌ Could not generate your invite link. Please try again later.')
+    return replyWithSupport(ctx, botText(lang, 'inviteFailed'))
   }
 }
 
@@ -183,21 +200,22 @@ bot.start(async (ctx) => {
       const referral = payload.startsWith('REF_') ? payload.slice(4) : payload
       const referralRef = /^\d+$/.test(referral) ? referral : `@${referral}`
 
-      return replyWithSupport(ctx, 'Welcome to GoBingo! 🎰', {
+      return replyWithSupport(ctx, '🎰 <b>Welcome to GoBingo!</b>', {
         reply_markup: {
           inline_keyboard: [
-            ...getStakeKeyboard(referralRef),
+            ...getStakeButtons(FRONTEND_URL, referralRef),
             [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
           ],
         },
       }).catch((err) => console.error('Start error:', err.message))
     }
 
-    return replyWithSupport(ctx, 'Please select your stake to play:', {
+    const lang = await getUserLanguage(ctx.from.id)
+    return replyWithSupport(ctx, botText(lang, 'selectLanguage'), {
       reply_markup: {
         inline_keyboard: [
-          ...getStakeKeyboard(),
           [{ text: '🇬🇧 English', callback_data: 'lang_en' }, { text: '🇪🇹 አማርኛ', callback_data: 'lang_am' }],
+          ...getStakeButtons(FRONTEND_URL),
           [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
         ]
       }
@@ -245,7 +263,7 @@ bot.action('lang_en', async (ctx) => {
   } catch (err) {
     console.error('Failed to set English language:', err.message)
   }
-  replyWithSupport(ctx, getT('en').lang_set_en, getMainMenu('en')).catch(() => {})
+  replyWithSupport(ctx, botText('en', 'languageSet'), getMainMenu('en')).catch(() => {})
 })
 
 bot.action('lang_am', async (ctx) => {
@@ -255,17 +273,17 @@ bot.action('lang_am', async (ctx) => {
   } catch (err) {
     console.error('Failed to set Amharic language:', err.message)
   }
-  replyWithSupport(ctx, getT('am').lang_set_am, getMainMenu('am')).catch(() => {})
+  replyWithSupport(ctx, botText('am', 'languageSet'), getMainMenu('am')).catch(() => {})
 })
 
 bot.command('menu', async (ctx) => {
   const lang = await getUserLanguage(ctx.from.id)
-  replyWithSupport(ctx, getT(lang).main_menu, getMainMenu(lang)).catch(() => {})
+  replyWithSupport(ctx, botText(lang, 'mainMenu'), getMainMenu(lang)).catch(() => {})
 })
 
 bot.command('play', async (ctx) => {
-  const t = getT(await getUserLanguage(ctx.from.id))
-  replyWithSupport(ctx, t.play_prompt, {
+  const lang = await getUserLanguage(ctx.from.id)
+  replyWithSupport(ctx, botText(lang, 'launchPrompt'), {
     reply_markup: {
       inline_keyboard: getStakeKeyboard()
     }
@@ -273,20 +291,20 @@ bot.command('play', async (ctx) => {
 })
 
 bot.command('balance', async (ctx) => {
-  const t = getT(await getUserLanguage(ctx.from.id))
+  const lang = await getUserLanguage(ctx.from.id)
   try {
     const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-    if (user) replyWithSupport(ctx, `${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`)
-    else replyWithSupport(ctx, t.user_not_found)
+    if (user) replyWithSupport(ctx, botText(lang, 'balance', { amount: Number(user.wallet_balance || 0).toFixed(2) }))
+    else replyWithSupport(ctx, botText(lang, 'userNotFound'))
   } catch (err) {
     console.error('[BOT ERROR] Failed to fetch balance for user:', ctx.from.id, err)
-    replyWithSupport(ctx, t.err_balance).catch(() => {})
+    replyWithSupport(ctx, botText(lang, 'balanceFailed')).catch(() => {})
   }
 })
 
 bot.command('help', async (ctx) => {
   const lang = await getUserLanguage(ctx.from.id)
-  ctx.reply((botTranslations[lang] || botTranslations.en).helpMessage).catch(() => {})
+  replyWithSupport(ctx, botText(lang, 'helpMessage')).catch(() => {})
 })
 
 bot.command('register', async (ctx) => {
@@ -301,38 +319,41 @@ bot.command('register', async (ctx) => {
 
 bot.command('deposit', async (ctx) => {
   userStates[ctx.from.id] = 'WAITING_FOR_RECEIPT'
-  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).deposit_inst).catch(() => {})
+  const lang = await getUserLanguage(ctx.from.id)
+  replyWithSupport(ctx, botText(lang, 'depositInstructions')).catch(() => {})
 })
 
 bot.command('withdraw', async (ctx) => {
   userStates[ctx.from.id] = 'WAITING_FOR_WITHDRAW_AMOUNT'
-  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).withdraw_prompt).catch(() => {})
+  const lang = await getUserLanguage(ctx.from.id)
+  replyWithSupport(ctx, botText(lang, 'withdrawPrompt')).catch(() => {})
 })
 
 bot.action('menu_balance', async (ctx) => {
-  const t = getT(await getUserLanguage(ctx.from.id))
+  const lang = await getUserLanguage(ctx.from.id)
   try {
     await ctx.answerCbQuery().catch(() => {})
     const user = await db('users').where({ telegram_id: ctx.from.id }).first()
-    if (!user) return replyWithSupport(ctx, t.user_not_found)
-    replyWithSupport(ctx, `${t.my_balance}${Number(user.wallet_balance || 0).toFixed(2)}`).catch(() => {})
+    if (!user) return replyWithSupport(ctx, botText(lang, 'userNotFound'))
+    replyWithSupport(ctx, botText(lang, 'balance', { amount: Number(user.wallet_balance || 0).toFixed(2) })).catch(() => {})
   } catch (err) {
     console.error('Balance Error:', err)
-    replyWithSupport(ctx, t.err_balance).catch(() => {})
+    replyWithSupport(ctx, botText(lang, 'balanceFailed')).catch(() => {})
   }
 })
 
 bot.action('menu_deposit', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   userStates[ctx.from.id] = 'WAITING_FOR_RECEIPT'
-  const msg = getT(await getUserLanguage(ctx.from.id)).deposit_inst
+  const msg = botText(await getUserLanguage(ctx.from.id), 'depositInstructions')
   replyWithSupport(ctx, msg).catch(() => {})
 })
 
 bot.action('menu_withdraw', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   userStates[ctx.from.id] = 'WAITING_FOR_WITHDRAW_AMOUNT'
-  replyWithSupport(ctx, getT(await getUserLanguage(ctx.from.id)).withdraw_prompt).catch(() => {})
+  const lang = await getUserLanguage(ctx.from.id)
+  replyWithSupport(ctx, botText(lang, 'withdrawPrompt')).catch(() => {})
 })
 
 bot.action('menu_room', async (ctx) => {
@@ -350,7 +371,7 @@ bot.action('menu_room', async (ctx) => {
 bot.action('menu_help', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {})
   const lang = await getUserLanguage(ctx.from.id)
-  ctx.reply((botTranslations[lang] || botTranslations.en).helpMessage).catch(() => {})
+  replyWithSupport(ctx, botText(lang, 'helpMessage')).catch(() => {})
 })
 
 bot.on('text', async (ctx) => {
@@ -388,7 +409,9 @@ bot.on('text', async (ctx) => {
         return replyWithSupport(ctx, t.deposit_verify_fail).catch(() => {})
       }
 
-      replyWithSupport(ctx, `${t.deposit_success}${deposit.amount.toFixed(2)}${t.deposit_success2}`).catch(() => {})
+      replyWithSupport(ctx, botText(lang, 'depositSubmitted', {
+        amount: deposit.amount.toFixed(2),
+      })).catch(() => {})
       delete userStates[ctx.from.id]
       return
     }
@@ -421,7 +444,9 @@ bot.on('text', async (ctx) => {
         })
       })
 
-      replyWithSupport(ctx, `${t.withdraw_success}${amount.toFixed(2)}${t.withdraw_pending}`).catch(() => {})
+      replyWithSupport(ctx, botText(lang, 'withdrawalPending', {
+        amount: amount.toFixed(2),
+      })).catch(() => {})
       delete userStates[ctx.from.id]
     }
   } catch (err) {
@@ -442,7 +467,7 @@ bot.on('contact', async (ctx) => {
     if (existingUser && existingUser.phone_number) {
       await ctx.reply(
         (botTranslations[lang] || botTranslations.en).alreadyRegistered,
-        Markup.removeKeyboard()
+        { ...Markup.removeKeyboard(), parse_mode: 'HTML' }
       )
       return
     }
