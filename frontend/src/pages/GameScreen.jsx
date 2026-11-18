@@ -110,31 +110,15 @@ const GameScreenContent = () => {
   const [spectatorBall, setSpectatorBall] = useState(null);
   const [bingoMessage, setBingoMessage] = useState(null);
   const [gameResult, setGameResult] = useState(null);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isVoiceOn, setIsVoiceOn] = useState(false);
 
-  useEffect(() => {
-    const handleFirstTap = () => {
-      unlockAudio();
-      document.removeEventListener('touchstart', handleFirstTap);
-      document.removeEventListener('click', handleFirstTap);
-    };
-    document.addEventListener('touchstart', handleFirstTap, { once: true });
-    document.addEventListener('click', handleFirstTap, { once: true });
-    return () => {
-      document.removeEventListener('touchstart', handleFirstTap);
-      document.removeEventListener('click', handleFirstTap);
-    };
-  }, []);
-
-  useEffect(() => {
-    toggleVoice(true);
-    return () => toggleVoice(false);
-  }, []);
+  useEffect(() => () => toggleVoice(false), []);
 
   const handleToggleVoice = () => {
-    const enabled = isMuted;
+    const enabled = !isVoiceOn;
+    setIsVoiceOn(enabled);
     toggleVoice(enabled);
-    setIsMuted(!enabled);
+    if (enabled) unlockAudio();
   };
 
   useEffect(() => {
@@ -439,11 +423,11 @@ const GameScreenContent = () => {
               </button>
               <button
                 type="button"
-                aria-label={isMuted ? t('unmuteSound') : t('muteSound')}
+                aria-label={isVoiceOn ? t('muteSound') : t('unmuteSound')}
                 onClick={handleToggleVoice}
                 className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-700 text-white shadow-[0_4px_0_rgb(51,65,85)] transition-all hover:bg-slate-600 active:translate-y-1 active:shadow-none"
               >
-                {isMuted ? '\u{1F507}' : '\u{1F50A}'}
+                {isVoiceOn ? '\u{1F50A}' : '\u{1F507}'}
               </button>
             </div>
           </div>
@@ -648,11 +632,11 @@ const GameScreenContent = () => {
           </button>
           <button
             type="button"
-            aria-label={isMuted ? t('unmuteSound') : t('muteSound')}
+            aria-label={isVoiceOn ? t('muteSound') : t('unmuteSound')}
             onClick={handleToggleVoice}
             className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-700 text-white shadow-[0_4px_0_rgb(51,65,85)] transition-all hover:bg-slate-600 active:translate-y-1 active:shadow-none"
           >
-            {isMuted ? '\u{1F507}' : '\u{1F50A}'}
+            {isVoiceOn ? '\u{1F50A}' : '\u{1F507}'}
           </button>
         </div>
       </div>

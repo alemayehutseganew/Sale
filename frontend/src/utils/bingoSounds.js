@@ -1,20 +1,25 @@
-let isVoiceEnabled = true;
+let isVoiceEnabled = false;
 let isAudioUnlocked = false;
+let audioUnlocker = null;
 const audioCache = {};
 const MAX_CACHE_SIZE = 10;
 
 export const unlockAudio = () => {
-  if (isAudioUnlocked) return;
+  if (isAudioUnlocked || audioUnlocker) return;
 
   try {
-    const unlockAudioObj = new Audio('/audio/B1.m4a');
-    unlockAudioObj.volume = 0;
-    unlockAudioObj.play()
+    const unlocker = new Audio('/audio/B1.m4a');
+    audioUnlocker = unlocker;
+    unlocker.volume = 0;
+    unlocker.play()
       .then(() => {
-        unlockAudioObj.pause();
+        unlocker.pause();
+        unlocker.currentTime = 0;
+        if (audioUnlocker === unlocker) audioUnlocker = null;
         isAudioUnlocked = true;
       })
       .catch(() => {
+        if (audioUnlocker === unlocker) audioUnlocker = null;
         isAudioUnlocked = true;
       });
   } catch (error) {
@@ -26,9 +31,15 @@ export const toggleVoice = (enabled) => {
   isVoiceEnabled = enabled;
   if (!enabled) {
     Object.values(audioCache).forEach((audio) => {
-      audio.pause();
-      audio.currentTime = 0;
+      if (!audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
     });
+    if (audioUnlocker && !audioUnlocker.paused) {
+      audioUnlocker.pause();
+      audioUnlocker.currentTime = 0;
+    }
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -79,7 +90,7 @@ export const playNumberAudio = (letter, number) => {
 };
 
 const fallbackToSpeech = (letter, number) => {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  if (!isVoiceEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
 
   const utterance = new SpeechSynthesisUtterance(`${letter} ${number}`);
   const amharicVoice = window.speechSynthesis.getVoices().find((voice) => voice.lang.startsWith('am'));
