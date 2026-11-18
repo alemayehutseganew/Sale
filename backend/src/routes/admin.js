@@ -153,7 +153,6 @@ router.post('/broadcast', adminAuth, async (req, res) => {
         successCount++
       } catch (err) {
         failCount++
-        console.warn(`[Admin] Broadcast delivery failed for user ${user.id}:`, err.message)
       }
     }
 

@@ -102,7 +102,6 @@ const GameScreenContent = () => {
   const [cardSelectionError, setCardSelectionError] = useState('');
   const [playerCount, setPlayerCount] = useState(0);
   const playersCount = playerCount;
-  const [readyPlayers, setReadyPlayers] = useState(0);
   const [countdown, setCountdown] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameStatus, setGameStatus] = useState(null);
@@ -147,12 +146,16 @@ const GameScreenContent = () => {
 
     socket.on('room_update', (data) => {
       if (Number.isFinite(Number(data.players))) setPlayerCount(Number(data.players));
-      if (Number.isFinite(Number(data.readyPlayers))) setReadyPlayers(Number(data.readyPlayers));
     });
     socket.on('players_updated', (data) => {
       if (Number.isFinite(Number(data.count))) setPlayerCount(Number(data.count));
     });
     socket.on('game_in_progress', (data) => {
+      if (data.status === 'ENDED') {
+        localStorage.removeItem('activeGameRoom')
+        navigate(`/select-card?stake=${stake}`, { replace: true })
+        return
+      }
       setCardsData([]);
       setMarkedNumbers([]);
       setGameStarted(false);
@@ -165,7 +168,6 @@ const GameScreenContent = () => {
       }
     });
     socket.on('sync_game_state', (data) => {
-      console.log('[SOCKET] Synced game state:', data);
       if (Array.isArray(data.calledNumbers)) {
         setCalledNumbers(data.calledNumbers);
         setCalledHistory(data.calledNumbers.slice(-5).map((number) => ({
@@ -300,7 +302,6 @@ const GameScreenContent = () => {
     socket.on('error', (err) => {
       const msg = String(err?.message || err || '')
       if (msg === 'Room not found' || msg.includes('ended') || msg.includes('ENDED') || msg.includes('ROOM_NOT_FOUND')) {
-        console.log('[Game] Active game no longer exists. Redirecting to card selection.')
         localStorage.removeItem('activeGameRoom')
         navigate(`/select-card?stake=${stake}`, { replace: true })
       }
@@ -336,7 +337,6 @@ const GameScreenContent = () => {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible' || !userId) return;
 
-      console.log('[App] Resumed from background. Reconnecting socket...');
       if (!socket.connected) {
         socket.connect();
         return;
@@ -373,14 +373,9 @@ const GameScreenContent = () => {
     setCardChangeLoading(true);
     setCardSelectionError('');
     try {
-      const res = await fetchApi('/rooms/join', {
+      const res = await fetchApi(`/rooms/${encodeURIComponent(roomId)}/select-cards`, {
         method: 'POST',
-        body: JSON.stringify({
-          stake,
-          roomId,
-          card_number: cardNumber,
-          userId,
-        }),
+        body: JSON.stringify({ userId, cardIds: [cardNumber] }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to change card');

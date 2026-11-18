@@ -18,7 +18,6 @@ if (!backendUrl || !botToken) {
       await bot.telegram.setWebhook(webhookUrl, {
         drop_pending_updates: true
       })
-      console.log(`✅ Webhook set to: ${webhookUrl}`)
 
       await bot.telegram.setMyCommands([
         { command: 'start', description: 'Start the bot and open the game' },
@@ -31,7 +30,6 @@ if (!backendUrl || !botToken) {
         { command: 'help', description: 'How to play the game' },
         { command: 'register', description: 'Register your phone number' }
       ])
-      console.log('✅ Commands registered')
     } catch (err) {
       if (err.response?.error_code === 409) {
         console.error('❌ Webhook conflict: Another bot instance is already running with this token. Make sure only one instance is active.')

@@ -26,7 +26,7 @@ export default function AdminLogin() {
       } else {
         setError(data.error || t('loginFailed'))
       }
-    } catch (e) {
+    } catch {
       setError(t('networkError'))
     }
   }

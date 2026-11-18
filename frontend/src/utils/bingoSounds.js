@@ -13,11 +13,12 @@ export const unlockAudio = () => {
       .then(() => {
         unlockAudioObj.pause();
         isAudioUnlocked = true;
-        console.log('[Audio] Mobile audio context unlocked.');
       })
-      .catch((err) => console.warn('[Audio] Unlock failed:', err));
+      .catch(() => {
+        isAudioUnlocked = true;
+      });
   } catch (error) {
-    console.error('[Audio] Error during unlock:', error);
+    console.error('[ERROR] Audio unlock failed:', error);
   }
 };
 
@@ -72,8 +73,7 @@ export const playNumberAudio = (letter, number) => {
 
   const audio = audioCache[fileName];
   audio.currentTime = 0;
-  audio.play().catch((err) => {
-    console.warn(`[Audio] ❌ Failed to play ${fileName}. File might be missing or corrupt. Falling back to Web Speech API.`, err);
+  audio.play().catch(() => {
     fallbackToSpeech(letter, numericNumber);
   });
 };

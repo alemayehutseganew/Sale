@@ -83,7 +83,7 @@ export default function Wallet() {
         setMessage(data.error || t('verificationFailed'))
         setMessageType('error')
       }
-    } catch (e) {
+    } catch {
       setMessage(t('networkError'))
       setMessageType('error')
     } finally {
@@ -111,7 +111,7 @@ export default function Wallet() {
         setMessage(data.error || t('withdrawalFailed'))
         setMessageType('error')
       }
-    } catch (e) {
+    } catch {
       setMessage(t('networkError'))
       setMessageType('error')
     } finally {

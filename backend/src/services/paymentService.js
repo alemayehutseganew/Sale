@@ -18,13 +18,6 @@ function getLinksEtErrorMessage(data, fallback) {
   return fallback
 }
 
-function logLinksEtResponse(status, data) {
-  console.log('[TELEBIRR VERIFY] links.et response:', {
-    status,
-    error: data?.error,
-  })
-}
-
 function delay(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds))
 }
@@ -50,11 +43,9 @@ async function readLinksEtResponse(response) {
   try {
     data = await response.json()
   } catch {
-    logLinksEtResponse(response.status, null)
     throw verificationError(`links.et returned an invalid response (HTTP ${response.status}).`)
   }
 
-  logLinksEtResponse(response.status, data)
   return data
 }
 

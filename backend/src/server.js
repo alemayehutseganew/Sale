@@ -25,8 +25,6 @@ if (missingVars.length > 0) {
   if (process.env.NODE_ENV === 'production') {
     console.error('If running on Enzonic, ensure these are added in the Enzonic Dashboard.');
   }
-} else {
-  console.log('✅ All required environment variables are loaded successfully.');
 }
 
 const express = require('express')
@@ -45,41 +43,18 @@ const { initGameHandler } = require('./sockets/gameHandler')
 const { bot } = require('./bot')
 
 async function performStartupCleanup() {
-  console.log('[Cleanup] Running startup recovery sweep...')
   try {
-    const stuckRooms = await db('game_rooms')
-      .whereIn('status', ['COUNTDOWN', 'PLAYING', 'CLAIMING'])
-      .orWhere(function () {
-        this.where('status', 'WAITING')
-          .andWhere('created_at', '<', db.raw("NOW() - INTERVAL '2 hours'"))
-      })
-
-    if (stuckRooms.length === 0) {
-      console.log('[Cleanup] No stuck rooms found. System is clean.')
-      return
-    }
-
-    console.log(`[Cleanup] Found ${stuckRooms.length} stuck rooms. Purging...`)
-    const roomIds = stuckRooms.map((room) => room.id)
-    await db.transaction(async (trx) => {
-      await trx('room_card_selections').whereIn('room_id', roomIds).del()
-      await trx('room_participants').whereIn('room_id', roomIds).del()
-      await trx('game_rooms').whereIn('id', roomIds).update({
-        status: 'WAITING',
-        called_numbers: JSON.stringify([]),
-        winning_pattern: null,
-      })
-    })
-    console.log('[Cleanup] Startup sweep complete. Stuck rooms purged.')
+    await cleanupStaleRooms()
   } catch (err) {
-    console.error('[Cleanup] Startup sweep failed:', err)
+    console.error('[ERROR] Startup room cleanup failed:', err)
   }
 }
 
 async function cleanupStaleRooms() {
   const staleRooms = await db('game_rooms')
     .whereIn('status', ['WAITING', 'COUNTDOWN'])
-    .andWhere('created_at', '<', db.raw("NOW() - INTERVAL '30 minutes'"))
+    .andWhere('created_at', '<', db.raw("NOW() - INTERVAL '1 hour'"))
+    .select('id')
 
   if (staleRooms.length === 0) return
 
@@ -89,7 +64,6 @@ async function cleanupStaleRooms() {
     await trx('room_participants').whereIn('room_id', roomIds).del()
     await trx('game_rooms').whereIn('id', roomIds).del()
   })
-  console.log(`[Cron] Purged ${staleRooms.length} abandoned rooms.`)
 }
 
 function startPeriodicCleanup() {
@@ -98,14 +72,13 @@ function startPeriodicCleanup() {
     if (cleanupRunning) return
     cleanupRunning = true
     try {
-      console.log('[Cron] Running periodic zombie room cleanup...')
       await cleanupStaleRooms()
     } catch (err) {
       console.error('[Cron] Periodic cleanup failed:', err)
     } finally {
       cleanupRunning = false
     }
-  }, 5 * 60 * 1000)
+  }, 10 * 60 * 1000)
 }
 
 async function initializeHeavyServices() {
@@ -113,7 +86,6 @@ async function initializeHeavyServices() {
   if (WEBHOOK_URL) {
     try {
       await bot.telegram.setWebhook(`${WEBHOOK_URL}/telegraf/${bot.secretPathComponent()}`)
-      console.log('✅ Telegram Webhook set successfully to:', WEBHOOK_URL)
     } catch (err) {
       console.error('❌ Failed to set Telegram Webhook:', err)
     }
@@ -146,7 +118,6 @@ const corsOptions = {
     if (configuredOrigins.includes(origin)) return callback(null, true)
     // Allow Vercel preview deployments (e.g. frontend-git-branch.vercel.app)
     if (origin.endsWith('.vercel.app')) return callback(null, true)
-    console.log('Blocked by CORS:', origin)
     return callback(new Error('Not allowed by CORS'))
   },
   credentials: true,
@@ -175,7 +146,6 @@ app.use('/api/payments', paymentsRoutes)
 app.use('/api/wallet', walletRoutes)
 app.use('/api/users', usersRoutes)
 app.use('/api/admin', adminRoutes)
-console.log('✅ API routes mounted: /api/auth, /api/rooms, /api/payments, /api/wallet, /api/users, /api/admin')
 
 // --- 404 (must come after all routes) ---
 app.use((req, res) => {
@@ -218,7 +188,7 @@ io.use((socket, next) => {
     const payload = jwt.verify(token, JWT_SECRET)
     if (payload.id) socket.data.userId = payload.id
   } catch (err) {
-    console.warn('[Socket] Invalid auth token; connecting without wallet updates:', err.message)
+    console.error('[ERROR] Invalid socket auth token:', err.message)
   }
   next()
 })
@@ -235,60 +205,34 @@ if (process.env.REDIS_URL) {
     Promise.all([pubClient.connect(), subClient.connect()])
       .then(() => {
         io.adapter(createAdapter(pubClient, subClient))
-        console.log('✅ Redis adapter connected for Socket.io scaling')
       })
       .catch((err) => console.error('❌ Redis adapter error:', err))
   } catch (err) {
-    console.log('⚠️ Redis packages not installed. Using in-memory adapter.')
+    console.error('[ERROR] Redis packages are unavailable:', err)
   }
-} else {
-  console.log('⚠️ REDIS_URL not set. Using in-memory Socket.io adapter.')
 }
 
 const PORT = process.env.PORT || 3001
 
 async function start() {
-  console.log('⏳ Running database migrations...')
-  const connectionConfig = { ...db.client.config.connection }
-  if (connectionConfig.connectionString) {
-    connectionConfig.connectionString = '[REDACTED]'
-  }
-  if (connectionConfig.password) {
-    connectionConfig.password = '[REDACTED]'
-  }
-  console.log('=== DATABASE CONNECTION DEBUG ===')
-  console.log('NODE_ENV:', process.env.NODE_ENV)
-  console.log('DATABASE_URL loaded:', Boolean(process.env.DATABASE_URL))
-  console.log('Knex Config being used:', JSON.stringify({
-    client: db.client.config.client,
-    connection: connectionConfig
-  }, null, 2))
-  console.log('Knex Pool settings:', JSON.stringify(db.client.config.pool, null, 2))
-  console.log('=================================')
   try {
     await db.migrate.latest()
-    console.log('✅ Database migrations complete')
   } catch (err) {
     console.error('❌ MIGRATION FAILED:', err)
   }
 
   await initializeHeavyServices()
 
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on port ${PORT}`)
-    console.log('🤖 Telegram webhook handler is ready')
-  })
+  server.listen(PORT, '0.0.0.0')
 }
 
 // --- Graceful shutdown (important for real-money: avoid mid-transaction kills) ---
-function shutdown(signal) {
-  console.log(`\n${signal} received. Shutting down gracefully...`)
+function shutdown() {
   io.close(() => {
     server.close(() => {
       db.destroy()
         .catch((err) => console.error('DB destroy error:', err))
         .finally(() => {
-          console.log('👋 Shutdown complete')
           process.exit(0)
         })
     })
@@ -299,8 +243,8 @@ function shutdown(signal) {
     process.exit(1)
   }, 10_000).unref()
 }
-process.on('SIGTERM', () => shutdown('SIGTERM'))
-process.on('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)
 
 process.on('uncaughtException', (err) => {
   console.error('❌ UNCAUGHT EXCEPTION:', err);

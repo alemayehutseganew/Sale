@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { API_BASE_URL, fetchApi } from './services/api'
+import { fetchApi } from './services/api'
 import SocketService from './services/socket'
 
 const WalletContext = createContext(null)

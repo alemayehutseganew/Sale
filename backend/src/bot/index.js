@@ -1,11 +1,9 @@
-console.log('🤖 Bot instance initialized...')
-
 const { Telegraf, Markup } = require('telegraf')
 const db = require('../db')
 const { parseTelebirrSMS, creditVerifiedDeposit } = require('../services/paymentService')
 const { getT } = require('./translations')
 
-const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://sale-green.vercel.app').replace(/\/$/, '')
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://sale-green.vercel.app').replace(/\/+$/, '')
 const SUPPORT_SUFFIX = '\n\nFor more support: @saleg122'
 const botTranslations = {
   en: {
@@ -85,9 +83,7 @@ function getMainMenu(lang = 'en') {
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }],
-        [{ text: '🎮 Play 50 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=50` } }],
-        [{ text: '🎮 Play 100 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=100` } }],
+        ...getStakeKeyboard(),
         [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
         [{ text: t.btn_balance, callback_data: 'menu_balance' }, { text: t.btn_deposit, callback_data: 'menu_deposit' }],
         [{ text: t.btn_withdraw, callback_data: 'menu_withdraw' }, { text: t.btn_room, callback_data: 'menu_room' }],
@@ -97,12 +93,18 @@ function getMainMenu(lang = 'en') {
   }
 }
 
-function getStakeKeyboard() {
-  return [
-    [{ text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }],
-    [{ text: '🎮 Play 50 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=50` } }],
-    [{ text: '🎮 Play 100 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=100` } }],
-  ]
+function getStakeUrl(stake, referral) {
+  const url = new URL(`${FRONTEND_URL}/select-card`)
+  url.searchParams.set('stake', String(stake))
+  if (referral) url.searchParams.set('ref', referral)
+  return url.toString()
+}
+
+function getStakeKeyboard(referral) {
+  return [10, 50, 100].map((stake) => [{
+    text: `🎮 Play ${stake} ETB`,
+    web_app: { url: getStakeUrl(stake, referral) },
+  }])
 }
 
 async function registerBotCommands() {
@@ -117,7 +119,7 @@ async function registerBotCommands() {
       { command: 'withdraw', description: 'withdraw' },
       { command: 'register', description: 'register' },
       { command: 'help', description: 'help' }
-    ]).then(() => console.log('✅ Commands registered')).catch(console.error)
+    ]).catch((err) => console.error('[BOT] Command registration failed:', err))
   }
   return commandRegistrationPromise
 }
@@ -137,8 +139,8 @@ async function sendInvite(ctx) {
     const shareText = 'Join me on GoBingo and win big! 🎰'
     const message = `🎉 Invite & Earn 5%!\n\nShare your unique link with friends. When they win a game, you get 5% of their prize!\n\n🔗 Your Link:\n${refLink}\n\nYou can withdraw your earnings once you reach 1,000 ETB!`
     const openGameButton = ctx.chat?.type === 'private'
-      ? { text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }
-      : { text: '🎮 Play 10 ETB', url: `${FRONTEND_URL}/select-card?stake=10` }
+      ? { text: '🎮 Play 10 ETB', web_app: { url: getStakeUrl(10) } }
+      : { text: '🎮 Play 10 ETB', url: getStakeUrl(10) }
 
     return replyWithSupport(ctx, message, {
       disable_web_page_preview: true,
@@ -170,7 +172,6 @@ async function getBotUsername() {
 
 bot.start(async (ctx) => {
   try {
-    console.log('[BOT TRACE] /start command triggered!')
     try {
       await registerBotCommands()
     } catch {
@@ -179,23 +180,13 @@ bot.start(async (ctx) => {
 
     const payload = ctx.startPayload
     if (payload) {
-      let webAppUrl = FRONTEND_URL
-      try {
-        const parsedUrl = new URL(FRONTEND_URL)
-        const referral = payload.startsWith('REF_') ? payload.slice(4) : payload
-        parsedUrl.searchParams.set('ref', /^\d+$/.test(referral) ? referral : `@${referral}`)
-        webAppUrl = parsedUrl.toString()
-      } catch (err) {
-        console.error('[BOT] Invalid FRONTEND_URL for referral link:', err.message)
-        return replyWithSupport(ctx, 'The game link is temporarily unavailable.')
-      }
+      const referral = payload.startsWith('REF_') ? payload.slice(4) : payload
+      const referralRef = /^\d+$/.test(referral) ? referral : `@${referral}`
 
       return replyWithSupport(ctx, 'Welcome to GoBingo! 🎰', {
         reply_markup: {
           inline_keyboard: [
-            [{ text: '🎮 Play 10 ETB', web_app: { url: webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'stake=10' } }],
-            [{ text: '🎮 Play 50 ETB', web_app: { url: webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'stake=50' } }],
-            [{ text: '🎮 Play 100 ETB', web_app: { url: webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'stake=100' } }],
+            ...getStakeKeyboard(referralRef),
             [{ text: '👥 Invite Friends & Earn 5%', callback_data: 'show_invite' }],
           ],
         },
@@ -350,9 +341,7 @@ bot.action('menu_room', async (ctx) => {
   replyWithSupport(ctx, t.room_prompt, {
     reply_markup: {
       inline_keyboard: [
-        [{ text: '🎮 Play 10 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=10` } }],
-        [{ text: '🎮 Play 50 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=50` } }],
-        [{ text: '🎮 Play 100 ETB', web_app: { url: `${FRONTEND_URL}/select-card?stake=100` } }],
+        ...getStakeKeyboard(),
       ]
     }
   }).catch(() => {})
@@ -380,8 +369,6 @@ bot.on('text', async (ctx) => {
       if (!user) {
         return replyWithSupport(ctx, t.user_not_found).catch(() => {})
       }
-
-      console.log('[TELEBIRR VERIFY] Extracted Reference:', parsedFromSMS.transactionId)
 
       let deposit
       try {
@@ -496,9 +483,5 @@ const handleUpdate = async (req, res) => {
     res.status(500).send('Error')
   }
 }
-
-bot.on('message', (ctx) => {
-  console.log('[BOT TRACE] Incoming message:', ctx.message.text || 'non-text message')
-})
 
 module.exports = { bot, getMainMenu, handleUpdate }

@@ -64,8 +64,19 @@ async function getPlayerCount(roomId) {
   return Number(result.count)
 }
 
-async function emitCurrentRoomState(socket, roomId, room) {
-  const playerCount = await getPlayerCount(roomId)
+function registerRoomSocket(room, socket, userId, isParticipant) {
+  if (!room.sockets) room.sockets = {}
+  if (!room.players) room.players = {}
+  room.sockets[socket.id] = userId
+  if (isParticipant) room.players[socket.id] = { socketId: socket.id, userId }
+}
+
+function hasConnectedRoomSockets(room) {
+  return Object.keys(room.sockets || {}).length > 0 || Object.keys(room.players || {}).length > 0
+}
+
+async function emitCurrentRoomState(socket, roomId, room, currentPlayerCount) {
+  const playerCount = currentPlayerCount ?? await getPlayerCount(roomId)
   const calledNumbers = Array.from(room.calledNumbers || [])
   socket.emit('players_updated', { count: playerCount })
 
@@ -105,6 +116,7 @@ function scheduleRoomReset(io, roomId, room) {
       clearRoomTimer(room, 'draw')
       room.status = 'WAITING'
       room.players = {}
+      room.sockets = {}
       room.calledNumbers.clear()
       room.claimedBy = []
       room.latestNumber = null
@@ -128,23 +140,119 @@ function scheduleRoomReset(io, roomId, room) {
   }, 5000)
 }
 
+async function cleanupEmptyRoom(roomId, room) {
+  if (rooms[roomId] !== room || hasConnectedRoomSockets(room)) return
+
+  if (room.status === 'CLAIMING') {
+    try {
+      await db('game_rooms').where({ id: roomId, status: 'CLAIMING' }).update({ status: 'PLAYING' })
+    } catch (err) {
+      console.error(`[ERROR] Failed to resume interrupted claim for room ${roomId}:`, err)
+    }
+  }
+  if (rooms[roomId] !== room || hasConnectedRoomSockets(room)) return
+  clearRoomTimers(room)
+  if (rooms[roomId] === room && !hasConnectedRoomSockets(room)) {
+    delete rooms[roomId]
+  }
+}
+
+function startDrawLoop(io, roomId, room) {
+  if (room.status !== 'PLAYING' || room.timers?.draw) return
+
+  const drawNextNumber = async () => {
+    if (rooms[roomId] !== room || room.status !== 'PLAYING') {
+      clearRoomTimer(room, 'draw')
+      return
+    }
+
+    if (room.calledNumbers.size >= 75) {
+      clearRoomTimer(room, 'draw')
+      room.status = 'ENDED'
+      await db('game_rooms').where({ id: roomId }).update({ status: 'ENDED' })
+      io.to(roomId).emit('game_ended_for_spectators', { noWinner: true })
+      scheduleRoomReset(io, roomId, room)
+      return
+    }
+
+    let number
+    do {
+      number = Math.floor(Math.random() * 75) + 1
+    } while (room.calledNumbers.has(number))
+
+    room.calledNumbers.add(number)
+    const calledNumbers = Array.from(room.calledNumbers)
+    const isFinalNumber = room.calledNumbers.size === 75
+    try {
+      await db('game_rooms')
+        .where({ id: roomId })
+        .update({
+          called_numbers: JSON.stringify(calledNumbers),
+          ...(isFinalNumber ? { status: 'ENDED' } : {}),
+        })
+    } catch (err) {
+      room.calledNumbers.delete(number)
+      console.error('[ERROR] Failed to save called number:', err)
+      scheduleRoomTimeout(room, 'draw', drawNextNumber, 4000)
+      return
+    }
+
+    if (rooms[roomId] !== room) return
+
+    const ball = getBallData(number)
+    room.latestNumber = ball
+    io.to(roomId).emit('new_number_called', { ...ball, calledNumbers })
+
+    if (isFinalNumber) {
+      clearRoomTimer(room, 'draw')
+      room.status = 'ENDED'
+      io.to(roomId).emit('game_ended_for_spectators', { noWinner: true })
+      scheduleRoomReset(io, roomId, room)
+      return
+    }
+
+    scheduleRoomTimeout(room, 'draw', drawNextNumber, 4000)
+  }
+
+  scheduleRoomTimeout(room, 'draw', drawNextNumber, 4000)
+}
+
 async function startCountdown(io, roomId) {
   const room = rooms[roomId]
-  if (!room || room.status !== 'WAITING') return
+  if (
+    !room ||
+    !['WAITING', 'COUNTDOWN'].includes(room.status) ||
+    room.timers?.countdown ||
+    room.countdownStarting
+  ) return
+  const isResuming = room.status === 'COUNTDOWN'
+  room.countdownStarting = true
   clearRoomTimer(room, 'draw')
-  clearRoomTimer(room, 'countdown')
   room.status = 'COUNTDOWN'
-  console.log(`[Game] Starting countdown for ${roomId}`)
 
   try {
-    await db('game_rooms').where({ id: roomId }).update({ status: 'COUNTDOWN' })
+    if (isResuming && await getPlayerCount(roomId) < 2) {
+      await db('game_rooms').where({ id: roomId }).update({ status: 'WAITING' })
+      room.status = 'WAITING'
+      room.countdownStarting = false
+      io.to(roomId).emit('countdown_tick', { timeLeft: null })
+      io.to(roomId).emit('game_aborted', { message: 'Not enough players. Game cancelled.' })
+      return
+    }
+
+    if (!isResuming) {
+      await db('game_rooms').where({ id: roomId }).update({ status: 'COUNTDOWN' })
+    }
   } catch (err) {
-    console.error('[Game] Failed to update countdown status:', err)
+    room.countdownStarting = false
+    console.error('[ERROR] Failed to initialize countdown:', err)
     room.status = 'WAITING'
     io.to(roomId).emit('game_aborted', { message: 'Server error. Game cancelled.' })
     return
   }
 
+  room.countdownStarting = false
+  if (rooms[roomId] !== room) return
   let timeLeft = 30
   io.to(roomId).emit('countdown_tick', { timeLeft })
 
@@ -156,6 +264,7 @@ async function startCountdown(io, roomId) {
       clearRoomTimer(room, 'countdown')
       try {
         const settlement = await db.transaction(async (trx) => {
+          await trx('game_rooms').where({ id: roomId }).forUpdate().first()
           const participants = await trx('room_participants')
             .where({ room_id: roomId })
             .forUpdate()
@@ -172,24 +281,24 @@ async function startCountdown(io, roomId) {
           const validPlayers = []
           const poorPlayers = []
           const cardlessPlayers = []
+          const participantIds = participants.map((participant) => participant.user_id)
+          const [selections, users] = await Promise.all([
+            trx('room_card_selections')
+              .where({ room_id: roomId })
+              .whereIn('user_id', participantIds)
+              .select('user_id'),
+            trx('users').whereIn('id', participantIds).forUpdate(),
+          ])
+          const usersById = new Map(users.map((user) => [user.id, user]))
+          const playersWithCards = new Set(selections.map((selection) => selection.user_id))
 
           for (const participant of participants) {
-            const cardSelection = await trx('room_card_selections')
-              .where({ room_id: roomId, user_id: participant.user_id })
-              .first()
-            if (!cardSelection) {
+            if (!playersWithCards.has(participant.user_id)) {
               cardlessPlayers.push(participant)
-              await trx('room_participants')
-                .where({ room_id: roomId, user_id: participant.user_id })
-                .del()
               continue
             }
 
-            const user = await trx('users')
-              .where({ id: participant.user_id })
-              .forUpdate()
-              .first()
-
+            const user = usersById.get(participant.user_id)
             if (user && Number(user.wallet_balance) >= room.stake) {
               validPlayers.push({ participant, user })
             } else {
@@ -198,21 +307,27 @@ async function startCountdown(io, roomId) {
           }
 
           if (validPlayers.length + poorPlayers.length < 2) {
+            if (cardlessPlayers.length) {
+              await trx('room_participants')
+                .where({ room_id: roomId })
+                .whereIn('user_id', cardlessPlayers.map((player) => player.user_id))
+                .del()
+            }
             return { success: false, error: 'NOT_ENOUGH_PLAYERS', poorPlayers, cardlessPlayers }
           }
 
-          for (const poorPlayer of poorPlayers) {
+          const removedUserIds = [...new Set([
+            ...poorPlayers.map((player) => player.user_id),
+            ...cardlessPlayers.map((player) => player.user_id),
+          ])]
+          if (removedUserIds.length) {
             await trx('room_participants')
-              .where({ room_id: roomId, user_id: poorPlayer.user_id })
+              .where({ room_id: roomId })
+              .whereIn('user_id', removedUserIds)
               .del()
             await trx('room_card_selections')
-              .where({ room_id: roomId, user_id: poorPlayer.user_id })
-              .del()
-          }
-
-          for (const cardlessPlayer of cardlessPlayers) {
-            await trx('room_card_selections')
-              .where({ room_id: roomId, user_id: cardlessPlayer.user_id })
+              .where({ room_id: roomId })
+              .whereIn('user_id', removedUserIds)
               .del()
           }
 
@@ -220,39 +335,31 @@ async function startCountdown(io, roomId) {
             return { success: false, error: 'NOT_ENOUGH_VALID_PLAYERS', poorPlayers, cardlessPlayers }
           }
 
-          for (const validPlayer of validPlayers) {
-            await trx('users').where({ id: validPlayer.user.id }).decrement('wallet_balance', room.stake)
-            await trx('financial_ledger').insert({
-              user_id: validPlayer.user.id,
-              amount: -room.stake,
-              type: 'ENTRY_FEE'
-            })
-          }
+          const validUserIds = validPlayers.map(({ user }) => user.id)
+          await trx('users').whereIn('id', validUserIds).decrement('wallet_balance', room.stake)
+          await trx('financial_ledger').insert(validPlayers.map(({ user }) => ({
+            user_id: user.id,
+            amount: -room.stake,
+            type: 'ENTRY_FEE'
+          })))
           await trx('game_rooms').where({ id: roomId }).update({ status: 'PLAYING' })
 
           return {
             success: true,
-            validPlayerCount: validPlayers.length,
-            validPlayers: validPlayers.map(({ user: validUser }) => validUser.id),
+            validPlayers: validUserIds,
             poorPlayers,
             cardlessPlayers,
           }
         })
 
         if (settlement.success && Array.isArray(settlement.validPlayers)) {
-          for (const playerId of settlement.validPlayers) {
-            try {
-              const updatedUser = await db('users').where({ id: playerId }).first()
-              if (!updatedUser) {
-                console.error(`[Game] Could not find user ${playerId} after stake deduction.`)
-                continue
-              }
-              io.to(`user_${playerId}`).emit('wallet_updated', {
-                newBalance: Number(updatedUser.wallet_balance),
-              })
-            } catch (err) {
-              console.error(`[Game] Failed to notify user ${playerId} after stake deduction:`, err)
-            }
+          const updatedUsers = await db('users')
+            .whereIn('id', settlement.validPlayers)
+            .select('id', 'wallet_balance')
+          for (const updatedUser of updatedUsers) {
+            io.to(`user_${updatedUser.id}`).emit('wallet_updated', {
+              newBalance: Number(updatedUser.wallet_balance),
+            })
           }
         }
 
@@ -270,6 +377,7 @@ async function startCountdown(io, roomId) {
               console.error('[Game] Failed to remove player without a card:', err)
             }
             delete room.players[playerSocketId]
+            delete room.sockets?.[playerSocketId]
           }
         }
 
@@ -287,6 +395,7 @@ async function startCountdown(io, roomId) {
               console.error('[Game] Failed to remove underfunded socket:', err)
             }
             delete room.players[playerSocketId]
+            delete room.sockets?.[playerSocketId]
           }
         }
 
@@ -305,49 +414,7 @@ async function startCountdown(io, roomId) {
 
         room.status = 'PLAYING'
         io.to(roomId).emit('game_started')
-        console.log(`[Game] All valid players paid. Starting game for room ${roomId}`)
-
-        scheduleRoomInterval(room, 'draw', async () => {
-          if (room.status !== 'PLAYING') {
-            clearRoomTimer(room, 'draw')
-            return
-          }
-
-          let number
-          do {
-            number = Math.floor(Math.random() * 75) + 1
-          } while (room.calledNumbers.has(number))
-
-          room.calledNumbers.add(number)
-          const calledNumbers = Array.from(room.calledNumbers)
-          db('game_rooms')
-            .where({ id: roomId })
-            .update({ called_numbers: JSON.stringify(calledNumbers) })
-            .catch((err) => console.error('[DRAW DB SAVE ERROR]', err))
-
-          let letter = 'B'
-          if (number > 15) letter = 'I'
-          if (number > 30) letter = 'N'
-          if (number > 45) letter = 'G'
-          if (number > 60) letter = 'O'
-
-          room.latestNumber = { number, letter }
-          console.log(`[Game] Calling number: ${letter} ${number}`)
-          io.to(roomId).emit('new_number_called', {
-            number,
-            letter,
-            ball: `${letter}-${number}`,
-            calledNumbers: Array.from(room.calledNumbers),
-          })
-
-          if (room.calledNumbers.size === 75) {
-            clearRoomTimer(room, 'draw')
-            room.status = 'ENDED'
-            await db('game_rooms').where({ id: roomId }).update({ status: 'ENDED' })
-            io.to(roomId).emit('game_ended_for_spectators', { noWinner: true })
-            scheduleRoomReset(io, roomId, room)
-          }
-        }, 4000)
+        startDrawLoop(io, roomId, room)
       } catch (err) {
         console.error('[Game] Error during countdown end:', err)
         room.status = 'WAITING'
@@ -379,33 +446,36 @@ function initGameHandler(io) {
 
     socket.on('join_room', async ({ roomId, userId, stake, spectator }) => {
       try {
-        let user = null
-        if (userId) {
-          user = await db('users').where({ id: userId }).first()
-          if (!user) user = await db('users').where({ telegram_id: userId }).first()
-        }
-        if (!user) return socket.emit('error', { message: 'User not found' })
+        if (!userId || !roomId) return socket.emit('error', { message: 'User and room are required' })
 
-        const persistedRoom = await db('game_rooms').where({ id: roomId }).first()
+        const [user, persistedRoom] = await Promise.all([
+          db('users')
+            .where(function () {
+              this.where('id', userId).orWhere('telegram_id', userId)
+            })
+            .first(),
+          db('game_rooms').where({ id: roomId }).first(),
+        ])
+        if (!user) return socket.emit('error', { message: 'User not found' })
         if (!persistedRoom) return socket.emit('error', { message: 'Room not found' })
         await socket.join(roomId)
-        const joinedPlayerCount = await getPlayerCount(roomId)
-        socket.emit('players_updated', { count: joinedPlayerCount })
+        const [joinedPlayerCount, participant, selections] = await Promise.all([
+          getPlayerCount(roomId),
+          db('room_participants').where({ room_id: roomId, user_id: user.id }).first(),
+          db('room_card_selections').where({ room_id: roomId, user_id: user.id }),
+        ])
         io.to(roomId).emit('players_updated', { count: joinedPlayerCount })
 
-        const participant = await db('room_participants')
-          .where({ room_id: roomId, user_id: user.id })
-          .first()
-        const cardSelection = participant
-          ? await db('room_card_selections')
-            .where({ room_id: roomId, user_id: user.id })
-            .first()
-          : null
+        const cardSelection = selections[0] || null
 
         // Early reconnection: returning player in an active game resumes without re-entering the lobby
         if (participant && ['PLAYING', 'COUNTDOWN', 'CLAIMING'].includes(persistedRoom.status)) {
           let room = rooms[roomId]
           if (!room) {
+            if (persistedRoom.status === 'CLAIMING') {
+              await db('game_rooms').where({ id: roomId }).update({ status: 'PLAYING' })
+              persistedRoom.status = 'PLAYING'
+            }
             let calledNumbers = persistedRoom.called_numbers || []
             if (typeof calledNumbers === 'string') calledNumbers = JSON.parse(calledNumbers)
             if (!Array.isArray(calledNumbers)) calledNumbers = []
@@ -422,22 +492,21 @@ function initGameHandler(io) {
               timers: {}
             }
           }
-          room.players[socket.id] = { socketId: socket.id, userId: user.id }
-          const selections = await db('room_card_selections')
-            .where({ room_id: roomId, user_id: user.id })
+          registerRoomSocket(room, socket, user.id, true)
           socket.emit('my_cards', {
             cards: selections.map((selection) => ({
               id: selection.card_id,
               matrix: typeof selection.card === 'string' ? JSON.parse(selection.card) : selection.card,
             })),
           })
-          const playerCount = await getPlayerCount(roomId)
           socket.emit('sync_game_state', {
             calledNumbers: Array.from(room.calledNumbers),
             currentBall: room.latestNumber,
             status: room.status,
-            players: playerCount,
+            players: joinedPlayerCount,
           })
+          if (room.status === 'COUNTDOWN') await startCountdown(io, roomId)
+          if (room.status === 'PLAYING') startDrawLoop(io, roomId, room)
           return
         }
 
@@ -451,6 +520,10 @@ function initGameHandler(io) {
 
         if (persistedRoom.status !== 'WAITING') {
           if (!rooms[roomId]) {
+            if (persistedRoom.status === 'CLAIMING') {
+              await db('game_rooms').where({ id: roomId }).update({ status: 'PLAYING' })
+              persistedRoom.status = 'PLAYING'
+            }
             let calledNumbers = persistedRoom.called_numbers || []
             if (typeof calledNumbers === 'string') calledNumbers = JSON.parse(calledNumbers)
             rooms[roomId] = {
@@ -470,7 +543,8 @@ function initGameHandler(io) {
         }
 
         if (persistedRoom.status === 'ENDED') {
-          const playerCount = await emitCurrentRoomState(socket, roomId, rooms[roomId])
+          registerRoomSocket(rooms[roomId], socket, user.id, false)
+          const playerCount = await emitCurrentRoomState(socket, roomId, rooms[roomId], joinedPlayerCount)
           return socket.emit('game_in_progress', {
             message: 'This game has ended. Please wait for the next round.',
             status: persistedRoom.status,
@@ -495,28 +569,11 @@ function initGameHandler(io) {
           room.latestNumber = calledNumbers.length
             ? getBallData(calledNumbers[calledNumbers.length - 1])
             : null
+          if (room.status === 'COUNTDOWN') await startCountdown(io, roomId)
+          if (room.status === 'PLAYING') startDrawLoop(io, roomId, room)
 
-          if (participant) {
-            room.players[socket.id] = { socketId: socket.id, userId: user.id }
-            const selections = await db('room_card_selections')
-              .where({ room_id: roomId, user_id: user.id })
-            socket.emit('my_cards', {
-              cards: selections.map((selection) => ({
-                id: selection.card_id,
-                matrix: typeof selection.card === 'string' ? JSON.parse(selection.card) : selection.card,
-              })),
-            })
-            const playerCount = await getPlayerCount(roomId)
-            socket.emit('sync_game_state', {
-              calledNumbers,
-              currentBall: room.latestNumber,
-              status: room.status,
-              players: playerCount,
-            })
-            return
-          }
-
-          const playerCount = await emitCurrentRoomState(socket, roomId, room)
+          registerRoomSocket(room, socket, user.id, false)
+          const playerCount = await emitCurrentRoomState(socket, roomId, room, joinedPlayerCount)
           socket.emit('game_in_progress', {
             message: 'A game is in progress. Please wait for the next round.',
             currentBall: room.latestNumber,
@@ -544,20 +601,16 @@ function initGameHandler(io) {
           }
         }
 
-        rooms[roomId].players[socket.id] = { socketId: socket.id, userId: user.id }
-        const playerCards = await db('room_card_selections')
-          .where({ room_id: roomId, user_id: user.id })
+        registerRoomSocket(rooms[roomId], socket, user.id, true)
         socket.emit('my_cards', {
-          cards: playerCards.map((selection) => ({
+          cards: selections.map((selection) => ({
             id: selection.card_id,
             matrix: typeof selection.card === 'string' ? JSON.parse(selection.card) : selection.card,
           })),
         })
 
-        const playerCount = await getPlayerCount(roomId)
-        await emitCurrentRoomState(socket, roomId, rooms[roomId])
-        console.log(`[Game] Player ${user.id} joined. Total players: ${playerCount}`)
-
+        const playerCount = joinedPlayerCount
+        await emitCurrentRoomState(socket, roomId, rooms[roomId], playerCount)
         io.to(roomId).emit('players_updated', { count: playerCount })
         io.to(roomId).emit('room_update', { players: playerCount, stake: rooms[roomId].stake })
 
@@ -565,10 +618,8 @@ function initGameHandler(io) {
         if (rooms[roomId].status === 'WAITING' && playerCount >= 2) {
           scheduleRoomTimeout(rooms[roomId], 'autoStart', async () => {
             const activeRoom = rooms[roomId]
-            const activePlayerCount = activeRoom
-              ? new Set(Object.values(activeRoom.players).map((player) => String(player.userId))).size
-              : 0
-            if (activeRoom && activeRoom.status === 'WAITING' && activePlayerCount >= 2) {
+            const participantCount = activeRoom ? await getPlayerCount(roomId) : 0
+            if (activeRoom && activeRoom.status === 'WAITING' && participantCount >= 2) {
               await startCountdown(io, roomId)
             }
           }, 2000)
@@ -584,56 +635,56 @@ function initGameHandler(io) {
         if (!room) return
 
         socket.join(roomId)
-        console.log(`[Spectator] User ${userId} is watching room ${roomId}`)
-        await emitCurrentRoomState(socket, roomId, room)
+        registerRoomSocket(room, socket, userId, false)
+        const playerCount = await emitCurrentRoomState(socket, roomId, room)
 
         socket.emit('spectator_sync', {
           calledNumbers: Array.from(room.calledNumbers),
           currentBall: room.latestNumber || null,
           status: room.status,
-          players: Object.keys(room.players).length
+          players: playerCount
         })
       } catch (err) {
         console.error('Spectator join error:', err)
       }
     })
     socket.on('leave_room', async ({ roomId, userId }) => {
-  try {
-    const room = rooms[roomId]
-    
-    // Only refund if the game hasn't started
-    if (room && (room.status === 'WAITING' || room.status === 'COUNTDOWN')) {
-      let user = null
-      if (userId) {
-        user = await db('users').where({ id: userId }).first()
-        if (!user) user = await db('users').where({ telegram_id: userId }).first()
-      }
+      try {
+        const room = rooms[roomId]
+        if (userId) {
+          const user = await db('users')
+            .where(function () {
+              this.where('id', userId).orWhere('telegram_id', userId)
+            })
+            .first()
+          if (user) {
+            await db.transaction(async (trx) => {
+              const persistedRoom = await trx('game_rooms').where({ id: roomId }).forUpdate().first()
+              if (!persistedRoom || !['WAITING', 'COUNTDOWN'].includes(persistedRoom.status)) return
 
-      if (user) {
-        const participant = await db('room_participants').where({ room_id: roomId, user_id: user.id }).first()
-        
-        if (participant) {
-          await db.transaction(async (trx) => {
-            await trx('room_participants').where({ room_id: roomId, user_id: user.id }).del()
-            await trx('room_card_selections').where({ room_id: roomId, user_id: user.id }).del()
-          })
-          console.log(`[Game] Removed unpaid participant ${user.id} from room ${roomId}.`)
+              const participant = await trx('room_participants')
+                .where({ room_id: roomId, user_id: user.id })
+                .first()
+              if (!participant) return
+
+              await trx('room_participants').where({ room_id: roomId, user_id: user.id }).del()
+              await trx('room_card_selections').where({ room_id: roomId, user_id: user.id }).del()
+            })
+          }
         }
+
+        if (room) {
+          const wasPlayer = Boolean(room.players?.[socket.id])
+          delete room.players?.[socket.id]
+          delete room.sockets?.[socket.id]
+          if (wasPlayer) await broadcastPlayerCount(io, roomId, room)
+          await cleanupEmptyRoom(roomId, room)
+        }
+        socket.leave(roomId)
+      } catch (err) {
+        console.error('[ERROR] Failed to leave room:', err)
       }
-    }
-    
-    // Clean up memory
-    if (room && room.players && room.players[socket.id]) {
-      delete room.players[socket.id]
-      if (room.readyPlayers) room.readyPlayers.delete(socket.id)
-      
-      await broadcastPlayerCount(io, roomId, room)
-    }
-    socket.leave(roomId)
-  } catch (err) {
-    console.error('[Game] leave_room error:', err)
-  }
-})
+    })
     socket.on('claim_bingo', async ({ roomId, userId, cardId, markedNumbers }) => {
   if (!Array.isArray(markedNumbers) || markedNumbers.length === 0) {
     return socket.emit('bingo_invalid', { message: 'You must mark numbers before claiming Bingo.' });
@@ -641,8 +692,6 @@ function initGameHandler(io) {
 
   const room = rooms[roomId];
   if (!room) return;
-
-  console.log(`[Claim] Received claim from user ${userId} for card ${cardId}. Status: ${room.status}`);
 
   // 1. Prevent claiming if game is not playing or is already ending
   if (room.status !== 'PLAYING') {
@@ -683,7 +732,6 @@ function initGameHandler(io) {
     const result = validateBingo(cardMatrix, calledSet, markedNumbers);
 
     if (!result.isValid) {
-      console.log(`[Claim] Invalid Bingo for user ${userId}. Reason: Not a valid pattern.`);
       return socket.emit('bingo_result', { success: false, message: 'Not a valid Bingo. Keep playing!' });
     }
 
@@ -701,13 +749,9 @@ function initGameHandler(io) {
     // Stop calling numbers
     clearRoomTimer(room, 'draw')
 
-    console.log(`[Claim] Valid Bingo by user ${userId}. Starting 3-second window.`);
-    
     // 6. Start the 3-second claim window (allows others to tie)
     scheduleRoomTimeout(room, 'claim', async () => {
       try {
-        console.log(`[Claim] Window closed. Processing payouts for room ${roomId}...`);
-        
         let winnerName = 'A Player';
         const winnerCount = room.claimedBy.length;
         const participants = await db('room_participants').where({ room_id: roomId });
@@ -721,8 +765,6 @@ function initGameHandler(io) {
         const referralPool = Math.floor((totalPool * 0.05) * 100) / 100;
         // Keep total commissions within 5% of the pot when winners tie.
         const referralCommissionPerWinner = Math.floor((referralPool / winnerCount) * 100) / 100;
-
-        console.log(`[PAYOUT] Pool: ${totalPool}, Fee: ${platformFee}, Payout: ${payoutPerWinner}`);
 
         // Process payouts in DB
         const inviterUpdates = new Map();
@@ -748,8 +790,6 @@ function initGameHandler(io) {
               throw new Error(`Could not load winner ${winnerUser.id} after payout.`);
             }
             winnerUpdates.set(winnerUser.id, updatedWinner);
-            console.log(`[PAYOUT] Credited ${payoutPerWinner} to winner ${winnerUser.id}`);
-
             if (winnerUser.referred_by && referralCommissionPerWinner > 0) {
               const inviter = await trx('users').where({ id: winnerUser.referred_by }).first();
               if (inviter) {
@@ -869,40 +909,21 @@ function initGameHandler(io) {
     socket.on('disconnect', async () => {
       for (const roomId of Object.keys(rooms)) {
         const room = rooms[roomId]
-        if (!room.players || !room.players[socket.id]) continue
+        if (!room.sockets?.[socket.id] && !room.players?.[socket.id]) continue
 
-        const userId = room.players[socket.id].userId
-        if (room.status === 'WAITING' && userId) {
+        const wasPlayer = Boolean(room.players?.[socket.id])
+        delete room.players?.[socket.id]
+        delete room.sockets?.[socket.id]
+
+        if (wasPlayer) {
           try {
-            const participant = await db('room_participants')
-              .where({ room_id: roomId, user_id: userId })
-              .first()
-            if (participant) {
-              await db.transaction(async (trx) => {
-                await trx('room_participants').where({ room_id: roomId, user_id: userId }).del()
-                await trx('room_card_selections').where({ room_id: roomId, user_id: userId }).del()
-              })
-              console.log(`[Disconnect] Freed card for user ${userId} in room ${roomId}`)
-            }
+            await broadcastPlayerCount(io, roomId, room)
           } catch (err) {
-            console.error(`[Disconnect] Failed to free card for user ${userId} in room ${roomId}:`, err)
+            console.error(`[ERROR] Failed to broadcast player count for room ${roomId}:`, err)
           }
         }
 
-        delete room.players[socket.id]
-        if (room.readyPlayers) room.readyPlayers.delete(userId)
-
-        try {
-          await broadcastPlayerCount(io, roomId, room)
-        } catch (err) {
-          console.error(`[Disconnect] Failed to broadcast player count for room ${roomId}:`, err)
-        }
-
-        if (Object.keys(room.players).length === 0) {
-          clearRoomTimers(room)
-          delete rooms[roomId]
-          console.log(`[Disconnect] Room ${roomId} completely emptied. Cleaned up.`)
-        }
+        await cleanupEmptyRoom(roomId, room)
       }
     })
   })
@@ -920,7 +941,6 @@ function setupSocket(server) {
       const payload = jwt.verify(token, JWT_SECRET)
       if (payload.id) socket.data.userId = payload.id
     } catch (err) {
-      console.warn('[Socket] Invalid auth token; connecting without wallet updates:', err.message)
     }
     next()
   })

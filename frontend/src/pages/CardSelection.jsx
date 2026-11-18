@@ -133,13 +133,17 @@ export default function CardSelection() {
     const userId = localStorage.getItem('dbUserId');
 
     try {
-      let res = await fetchApi('/rooms/join', {
+      let res = roomId
+        ? await fetchApi(`/rooms/${encodeURIComponent(roomId)}/select-cards`, {
+          method: 'POST',
+          body: JSON.stringify({ userId, cardIds: [cardNumber] }),
+        })
+        : await fetchApi('/rooms/join', {
         method: 'POST',
         body: JSON.stringify({
           stake: Number(stake),
           card_number: cardNumber,
           userId,
-          ...(roomId ? { roomId } : {}),
         }),
       });
 
@@ -156,6 +160,7 @@ export default function CardSelection() {
               stake: Number(stake),
               card_number: cardNumber,
               userId,
+              ...(roomId ? { roomId } : {}),
             }),
           });
           data = await res.json();
@@ -163,6 +168,8 @@ export default function CardSelection() {
         }
         if (!res.ok) throw new Error(data.error || t('failedToJoinRoom'));
       }
+
+      const joinedRoomId = data.roomId || roomId;
 
       if (data.status === 'reconnected' || data.status === 'spectator') {
         const gameParams = new URLSearchParams({
@@ -176,17 +183,18 @@ export default function CardSelection() {
 
       const socket = SocketService.get() || SocketService.connect();
       socket.emit('join_room', {
-        roomId: data.roomId,
+        roomId: joinedRoomId,
         userId,
         stake: Number(stake),
       });
 
       localStorage.setItem('activeGameRoom', JSON.stringify({
-        roomId: data.roomId,
+        roomId: joinedRoomId,
         stake: Number(stake),
         cardNumber: data.card?.id || cardNumber,
       }));
-      navigate(`/game?roomId=${data.roomId}&stake=${stake}`);
+      const gameParams = new URLSearchParams({ roomId: joinedRoomId, stake });
+      navigate(`/game?${gameParams.toString()}`);
     } catch (err) {
       if (/started|in progress|already playing|cannot join/i.test(err.message)) {
         const gameParams = new URLSearchParams({ stake });
