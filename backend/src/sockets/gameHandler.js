@@ -444,14 +444,15 @@ function initGameHandler(io) {
       socket.join(`user_${socket.data.userId}`)
     }
 
-    socket.on('join_room', async ({ roomId, userId, stake, spectator }) => {
+    socket.on('join_room', async ({ roomId, userId, stake, spectator } = {}) => {
       try {
-        if (!userId || !roomId) return socket.emit('error', { message: 'User and room are required' })
+        const reconnectUserId = socket.data?.userId || userId
+        if (!reconnectUserId || !roomId) return socket.emit('error', { message: 'User and room are required' })
 
         const [user, persistedRoom] = await Promise.all([
           db('users')
             .where(function () {
-              this.where('id', userId).orWhere('telegram_id', userId)
+              this.where('id', reconnectUserId).orWhere('telegram_id', reconnectUserId)
             })
             .first(),
           db('game_rooms').where({ id: roomId }).first(),

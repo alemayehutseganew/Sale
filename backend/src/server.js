@@ -39,6 +39,7 @@ const adminRoutes = require('./routes/admin')
 const { Server } = require('socket.io')
 const jwt = require('jsonwebtoken')
 const db = require('./db')
+const { getWebhookBaseUrl, getBotWebhookUrl } = require('./bot/webhookUrl')
 const { initGameHandler } = require('./sockets/gameHandler')
 const { bot } = require('./bot')
 
@@ -82,15 +83,14 @@ function startPeriodicCleanup() {
 }
 
 async function initializeHeavyServices() {
-  const WEBHOOK_URL = process.env.WEBHOOK_URL
-  if (WEBHOOK_URL) {
-    try {
-      await bot.telegram.setWebhook(`${WEBHOOK_URL}/telegraf/${bot.secretPathComponent()}`)
-    } catch (err) {
-      console.error('❌ Failed to set Telegram Webhook:', err)
-    }
-  } else {
-    console.error('❌ WEBHOOK_URL is not defined in environment variables!')
+  const baseUrl = getWebhookBaseUrl()
+  try {
+    const webhookUrl = getBotWebhookUrl(baseUrl, bot.secretPathComponent())
+    await bot.telegram.setWebhook(webhookUrl)
+    console.log('✅ Telegram webhook registered.')
+  } catch (err) {
+    console.error('❌ Failed to set Telegram Webhook:', err)
+    throw err
   }
 
   await performStartupCleanup()
@@ -215,15 +215,17 @@ if (process.env.REDIS_URL) {
 const PORT = process.env.PORT || 3001
 
 async function start() {
-  try {
-    await db.migrate.latest()
-  } catch (err) {
-    console.error('❌ MIGRATION FAILED:', err)
-  }
-
+  await db.migrate.latest()
   await initializeHeavyServices()
 
-  server.listen(PORT, '0.0.0.0')
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(PORT, '0.0.0.0', () => {
+      server.removeListener('error', reject)
+      resolve()
+    })
+  })
+  console.log(`✅ Backend listening on port ${PORT}`)
 }
 
 // --- Graceful shutdown (important for real-money: avoid mid-transaction kills) ---
@@ -254,6 +256,14 @@ process.on('unhandledRejection', (err) => {
   console.error('[UNHANDLED REJECTION]:', err)
 });
 
-start()
+start().catch(async (err) => {
+  console.error('❌ STARTUP FAILED:', err)
+  try {
+    await db.destroy()
+  } catch (shutdownError) {
+    console.error('❌ Failed to close database after startup failure:', shutdownError)
+  }
+  process.exitCode = 1
+})
 
 module.exports = { app, server, start }

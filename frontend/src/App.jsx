@@ -27,6 +27,31 @@ export default function App() {
   )
 }
 
+function getActiveGamePath() {
+  const activeRoomData = localStorage.getItem('activeGameRoom')
+  if (!activeRoomData) return null
+
+  try {
+    const { roomId, stake } = JSON.parse(activeRoomData)
+    if (!roomId) {
+      localStorage.removeItem('activeGameRoom')
+      return null
+    }
+
+    const parsedStake = Number(stake)
+    const gameParams = new URLSearchParams({
+      roomId: String(roomId),
+      stake: String(Number.isFinite(parsedStake) && parsedStake > 0 ? parsedStake : 10),
+      spectator: 'false',
+    })
+    return `/game?${gameParams.toString()}`
+  } catch (err) {
+    console.error('[App] Failed to parse active game data', err)
+    localStorage.removeItem('activeGameRoom')
+    return null
+  }
+}
+
 function AppRoutes() {
   const navigate = useNavigate()
 
@@ -37,21 +62,8 @@ function AppRoutes() {
 
     const initData = tg?.initData || ''
     if (!initData) {
-      const activeRoomData = localStorage.getItem('activeGameRoom')
-      if (activeRoomData) {
-        try {
-          const { roomId, stake } = JSON.parse(activeRoomData)
-          if (roomId && stake) {
-            const gameParams = new URLSearchParams({
-              roomId: String(roomId),
-              stake: String(stake),
-            })
-            navigate(`/game?${gameParams.toString()}`, { replace: true })
-          }
-        } catch (err) {
-          console.error('[App] Failed to parse active game data', err)
-        }
-      }
+      const activeGamePath = getActiveGamePath()
+      if (activeGamePath) navigate(activeGamePath, { replace: true })
       return
     }
 
@@ -72,21 +84,10 @@ function AppRoutes() {
           window.dispatchEvent(new Event('wallet-refresh'))
 
           // Auto-resume: if there's an active game in localStorage, go straight to game screen
-          const activeRoomData = localStorage.getItem('activeGameRoom')
-          if (activeRoomData) {
-            try {
-              const { roomId, stake } = JSON.parse(activeRoomData)
-              if (roomId && stake) {
-                const gameParams = new URLSearchParams({
-                  roomId: String(roomId),
-                  stake: String(stake),
-                })
-                navigate(`/game?${gameParams.toString()}`, { replace: true })
-                return
-              }
-            } catch (err) {
-              console.error('[App] Failed to parse active game data', err)
-            }
+          const activeGamePath = getActiveGamePath()
+          if (activeGamePath) {
+            navigate(activeGamePath, { replace: true })
+            return
           }
 
           // No active game, default to card selection
@@ -99,7 +100,18 @@ function AppRoutes() {
 
   useEffect(() => {
     const socket = SocketService.get() || SocketService.connect()
-    const clearActiveRoom = () => localStorage.removeItem('activeGameRoom')
+    const clearActiveRoom = () => {
+      const activeRoomData = localStorage.getItem('activeGameRoom')
+      if (activeRoomData) {
+        try {
+          const { roomId } = JSON.parse(activeRoomData)
+          if (roomId) localStorage.removeItem(`marked_${roomId}`)
+        } catch (err) {
+          console.error('[App] Failed to clear saved game marks', err)
+        }
+      }
+      localStorage.removeItem('activeGameRoom')
+    }
     socket.on('game_over', clearActiveRoom)
     socket.on('game_ended_for_spectators', clearActiveRoom)
     socket.on('room_reset', clearActiveRoom)

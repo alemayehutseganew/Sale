@@ -1,15 +1,15 @@
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
+const { getWebhookBaseUrl, getBotWebhookUrl } = require('./src/bot/webhookUrl');
+if (!process.env.TELEGRAM_BOT_TOKEN) {
+  throw new Error('TELEGRAM_BOT_TOKEN must be set.')
+}
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-
-// Use your actual Enzonic URL here. 
-const WEBHOOK_URL = process.env.BACKEND_URL 
-  ? `${process.env.BACKEND_URL}/api/bot/webhook` 
-  : 'https://ked.enzonic.dev/api/bot/webhook';
+const WEBHOOK_URL = getBotWebhookUrl(getWebhookBaseUrl(), bot.secretPathComponent());
 
 (async () => {
   try {
-    console.log(`⏳ Setting webhook to: ${WEBHOOK_URL}`);
+    console.log('⏳ Setting Telegram webhook...');
     await bot.telegram.setWebhook(WEBHOOK_URL);
     console.log(`✅ Webhook set successfully!`);
     
@@ -27,5 +27,6 @@ const WEBHOOK_URL = process.env.BACKEND_URL
     console.log('✅ Commands registered successfully!');
   } catch (err) {
     console.error('❌ Failed to set webhook:', err);
+    process.exitCode = 1;
   }
 })();

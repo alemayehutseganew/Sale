@@ -96,6 +96,7 @@ const GameScreenContent = () => {
   const [currentBall, setCurrentBall] = useState(null);
   const [calledHistory, setCalledHistory] = useState([]);
   const [markedNumbers, setMarkedNumbers] = useState([]);
+  const [markedNumbersRoomId, setMarkedNumbersRoomId] = useState(null);
   const [cardsData, setCardsData] = useState([]);
   const [takenCards, setTakenCards] = useState([]);
   const [cardChangeLoading, setCardChangeLoading] = useState(false);
@@ -113,6 +114,36 @@ const GameScreenContent = () => {
   const [isVoiceOn, setIsVoiceOn] = useState(false);
 
   useEffect(() => () => toggleVoice(false), []);
+
+  useEffect(() => {
+    try {
+      const savedMarks = localStorage.getItem(`marked_${roomId}`);
+      const parsedMarks = savedMarks ? JSON.parse(savedMarks) : [];
+      if (!Array.isArray(parsedMarks)) {
+        throw new TypeError('Saved marks must be an array');
+      }
+
+      setMarkedNumbers([...new Set(parsedMarks.map(Number).filter((number) => (
+        Number.isInteger(number) && number >= 1 && number <= 75
+      )))]);
+    } catch (err) {
+      console.error('Failed to restore saved marks:', err);
+      setMarkedNumbers([]);
+    } finally {
+      setMarkedNumbersRoomId(roomId);
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    if (markedNumbersRoomId !== roomId) return;
+
+    const storageKey = `marked_${roomId}`;
+    if (markedNumbers.length > 0) {
+      localStorage.setItem(storageKey, JSON.stringify(markedNumbers));
+    } else {
+      localStorage.removeItem(storageKey);
+    }
+  }, [markedNumbers, markedNumbersRoomId, roomId]);
 
   const handleToggleVoice = () => {
     const enabled = !isVoiceOn;
@@ -137,11 +168,12 @@ const GameScreenContent = () => {
     socket.on('game_in_progress', (data) => {
       if (data.status === 'ENDED') {
         localStorage.removeItem('activeGameRoom')
+        localStorage.removeItem(`marked_${roomId}`)
+        setMarkedNumbers([]);
         navigate(`/select-card?stake=${stake}`, { replace: true })
         return
       }
       setCardsData([]);
-      setMarkedNumbers([]);
       setGameStarted(false);
       setSpectatorNumbers(data.calledNumbers || []);
       setSpectatorBall(data.currentBall || null);
@@ -182,6 +214,9 @@ const GameScreenContent = () => {
       window.location.href = '/wallet';
     });
     socket.on('game_aborted', (data) => {
+      localStorage.removeItem('activeGameRoom')
+      localStorage.removeItem(`marked_${roomId}`)
+      setMarkedNumbers([])
       alert(`⚠️ ${translateServerMessage(data.message)}`);
       window.location.href = '/';
     });
@@ -223,6 +258,8 @@ const GameScreenContent = () => {
     });
     socket.on('game_over', (data) => {
       localStorage.removeItem('activeGameRoom')
+      localStorage.removeItem(`marked_${roomId}`)
+      setMarkedNumbers([]);
       setTimeout(() => navigate(`/select-card?stake=${stake}`), 3000)
       const myId = String(userId);
       const isWinner = data.winnerIds?.some(id => String(id) === myId);
@@ -242,6 +279,8 @@ const GameScreenContent = () => {
       }
     });
     socket.on('game_ended_for_spectators', (data) => {
+      localStorage.removeItem(`marked_${roomId}`)
+      setMarkedNumbers([])
       if (data?.noWinner) {
         setGameResult({
           type: 'loss',
@@ -268,6 +307,8 @@ const GameScreenContent = () => {
     });
     socket.on('room_reset', (data) => {
       localStorage.removeItem('activeGameRoom')
+      localStorage.removeItem(`marked_${roomId}`)
+      setMarkedNumbers([]);
       setGameResult(null);
       setSpectatorNumbers([]);
       setSpectatorBall(null);
@@ -287,6 +328,8 @@ const GameScreenContent = () => {
       const msg = String(err?.message || err || '')
       if (msg === 'Room not found' || msg.includes('ended') || msg.includes('ENDED') || msg.includes('ROOM_NOT_FOUND')) {
         localStorage.removeItem('activeGameRoom')
+        localStorage.removeItem(`marked_${roomId}`)
+        setMarkedNumbers([])
         navigate(`/select-card?stake=${stake}`, { replace: true })
       }
     });
@@ -717,7 +760,7 @@ const GameScreenContent = () => {
                 <div className="grid grid-cols-5 gap-1">
                   {cardsData[0]?.matrix?.flat().map((num, index) => {
                     const isFree = index === 12 || num === 'FREE';
-                    const isMarked = isFree || markedNumbers.includes(num);
+                    const isMarked = isFree || markedNumbers.some((markedNumber) => Number(markedNumber) === Number(num));
                     return (
                       <button key={index} type="button" onClick={() => !isFree && handleDaub(num)} className={`flex aspect-square min-w-0 items-center justify-center rounded-lg text-[10px] font-bold transition-all duration-150 sm:text-xs ${isMarked ? 'scale-[0.98] border border-slate-700 bg-slate-900 text-blue-300 shadow-[inset_0_4px_8px_rgba(0,0,0,0.9)]' : 'border border-slate-300 bg-slate-100 text-slate-900 shadow-[0_3px_0_rgb(148,163,184)] active:translate-y-0.5 active:shadow-none'}`}>
                         {isFree ? 'F' : num}
