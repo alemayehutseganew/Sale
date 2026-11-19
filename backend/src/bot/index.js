@@ -188,6 +188,7 @@ async function getBotUsername() {
 }
 
 bot.start(async (ctx) => {
+  console.log(`[BOT TRACE] /start received from Sale user: ${ctx.from.id}`)
   try {
     try {
       await registerBotCommands()

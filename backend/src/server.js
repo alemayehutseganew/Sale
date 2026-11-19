@@ -87,9 +87,9 @@ async function initializeHeavyServices() {
   try {
     const webhookUrl = getBotWebhookUrl(baseUrl, bot.secretPathComponent())
     await bot.telegram.setWebhook(webhookUrl)
-    console.log('✅ Telegram webhook registered.')
+    console.log(`✅ Sale Telegram Webhook set successfully to: ${baseUrl}`)
   } catch (err) {
-    console.error('❌ Failed to set Telegram Webhook:', err)
+    console.error('❌ Failed to set Sale Telegram Webhook:', err)
     throw err
   }
 
@@ -135,8 +135,13 @@ app.get('/health', (req, res) => {
 })
 
 app.post(`/telegraf/${bot.secretPathComponent()}`, (req, res) => {
+  console.log('[WEBHOOK TRACE] Received update from Telegram for Sale:', req.body?.update_id)
   res.sendStatus(200)
-  bot.handleUpdate(req.body).catch((err) => console.error('[WEBHOOK ERROR]', err))
+  try {
+    bot.handleUpdate(req.body).catch((err) => console.error('❌ [WEBHOOK ASYNC ERROR]', err))
+  } catch (err) {
+    console.error('❌ [WEBHOOK SYNC ERROR]', err)
+  }
 })
 
 // --- API routes ---
