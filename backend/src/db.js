@@ -26,26 +26,49 @@ if (environment === 'production') {
 
 const db = knex(databaseConfig)
 
+const MAX_RETRIES = 5
+const BASE_DELAY_MS = 1000
+const CONNECTION_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  '08006',
+  '08001',
+  '57P01',
+])
+
+function isConnectionError(error) {
+  if (!error) return false
+  if (CONNECTION_ERROR_CODES.has(error.code)) return true
+  if (error.name === 'KnexTimeoutError') return true
+
+  const message = String(error.message || '')
+  return (
+    message.includes('Connection terminated') ||
+    message.includes('Connection ended') ||
+    message.includes('KnexTimeoutError')
+  )
+}
+
 /**
  * Retry wrapper for critical queries to handle Neon serverless cold starts.
  * Retries with exponential backoff on transient connection errors.
  */
-async function withRetry(fn, maxRetries = 3, baseDelay = 1000) {
-  let lastError
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+async function withRetry(operation, retries = MAX_RETRIES, baseDelayMs = BASE_DELAY_MS) {
+  let retryCount = 0
+  while (true) {
     try {
-      return await fn()
+      return await operation()
     } catch (err) {
-      lastError = err
-      const message = String(err.message || '')
-      const isTransient =
-        /connection|timeout|socket|ECONNREFUSED|ETIMEDOUT|terminating|server closed|cold/i.test(message)
-      if (!isTransient || attempt === maxRetries - 1) break
-      const delay = baseDelay * Math.pow(2, attempt)
+      if (retries <= 0 || !isConnectionError(err)) throw err
+
+      const delay = baseDelayMs * Math.pow(2, retryCount) + Math.random() * BASE_DELAY_MS
+      console.warn(`[DB RETRY] Connection error. Retrying in ${Math.round(delay)}ms... (${retries} attempts left)`)
       await new Promise((resolve) => setTimeout(resolve, delay))
+      retries -= 1
+      retryCount += 1
     }
   }
-  throw lastError
 }
 
 module.exports = db
