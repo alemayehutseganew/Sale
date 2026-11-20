@@ -217,20 +217,44 @@ if (process.env.REDIS_URL) {
   }
 }
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3000
 
-async function start() {
-  await db.migrate.latest()
-  await initializeHeavyServices()
+async function initializeHeavyServicesWithRetry() {
+  while (true) {
+    try {
+      await db.raw('SELECT 1')
+      console.log('✅ Database connected successfully.')
+      await db.migrate.latest()
+      console.log('✅ Migrations complete.')
+    } catch (err) {
+      console.error('❌ CRITICAL: Database connection failed. Retrying in background...')
+      console.error(err.message)
+      await new Promise((resolve) => setTimeout(resolve, 10_000))
+      continue
+    }
 
-  await new Promise((resolve, reject) => {
+    try {
+      await initializeHeavyServices()
+      return
+    } catch (err) {
+      console.error('❌ Heavy services failed to initialize:', err.message)
+      await new Promise((resolve) => setTimeout(resolve, 10_000))
+    }
+  }
+}
+
+function start() {
+  return new Promise((resolve, reject) => {
     server.once('error', reject)
     server.listen(PORT, '0.0.0.0', () => {
       server.removeListener('error', reject)
+      console.log(`✅ SERVER IS LISTENING ON PORT ${PORT}`)
+      initializeHeavyServicesWithRetry().catch((err) => {
+        console.error('❌ Heavy services failed to initialize:', err.message)
+      })
       resolve()
     })
   })
-  console.log(`✅ Backend listening on port ${PORT}`)
 }
 
 // --- Graceful shutdown (important for real-money: avoid mid-transaction kills) ---
@@ -261,13 +285,8 @@ process.on('unhandledRejection', (err) => {
   console.error('[UNHANDLED REJECTION]:', err)
 });
 
-start().catch(async (err) => {
+start().catch((err) => {
   console.error('❌ STARTUP FAILED:', err)
-  try {
-    await db.destroy()
-  } catch (shutdownError) {
-    console.error('❌ Failed to close database after startup failure:', shutdownError)
-  }
   process.exitCode = 1
 })
 
