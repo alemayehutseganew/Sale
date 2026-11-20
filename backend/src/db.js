@@ -1,6 +1,14 @@
+const path = require('path')
+require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true })
+
+const environment = process.env.NODE_ENV || 'development'
+if (environment === 'production' && !process.env.DATABASE_URL) {
+  console.error('❌ CRITICAL ERROR: DATABASE_URL is missing! Cannot start.')
+  process.exit(1)
+}
+
 const knex = require('knex')
 const config = require('../knexfile.js')
-const environment = process.env.NODE_ENV || 'development'
 
 const databaseConfig = { ...config[environment] }
 
@@ -63,7 +71,9 @@ async function withRetry(operation, retries = MAX_RETRIES, baseDelayMs = BASE_DE
       if (retries <= 0 || !isConnectionError(err)) throw err
 
       const delay = baseDelayMs * Math.pow(2, retryCount) + Math.random() * BASE_DELAY_MS
-      console.warn(`[DB RETRY] Connection error. Retrying in ${Math.round(delay)}ms... (${retries} attempts left)`)
+      if (retryCount === 0) {
+        console.warn(`[DB RETRY] Connection error. Retrying in ${Math.round(delay)}ms...`)
+      }
       await new Promise((resolve) => setTimeout(resolve, delay))
       retries -= 1
       retryCount += 1

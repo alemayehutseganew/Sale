@@ -220,6 +220,7 @@ if (process.env.REDIS_URL) {
 const PORT = process.env.PORT || 3000
 
 async function initializeHeavyServicesWithRetry() {
+  let retryCount = 0
   while (true) {
     try {
       await db.raw('SELECT 1')
@@ -227,9 +228,11 @@ async function initializeHeavyServicesWithRetry() {
       await db.migrate.latest()
       console.log('✅ Migrations complete.')
     } catch (err) {
-      console.error('❌ CRITICAL: Database connection failed. Retrying in background...')
-      console.error(err.message)
-      await new Promise((resolve) => setTimeout(resolve, 10_000))
+      retryCount += 1
+      if (retryCount % 5 === 1) {
+        console.error(`❌ DATABASE CONNECT FAILED (Attempt ${retryCount}). Retrying in 30s...`, err.message)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 30_000))
       continue
     }
 
@@ -237,8 +240,11 @@ async function initializeHeavyServicesWithRetry() {
       await initializeHeavyServices()
       return
     } catch (err) {
-      console.error('❌ Heavy services failed to initialize:', err.message)
-      await new Promise((resolve) => setTimeout(resolve, 10_000))
+      retryCount += 1
+      if (retryCount % 5 === 1) {
+        console.error(`❌ Heavy services failed to initialize (Attempt ${retryCount}). Retrying in 30s...`, err.message)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 30_000))
     }
   }
 }

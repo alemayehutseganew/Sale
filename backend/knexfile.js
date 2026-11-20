@@ -14,26 +14,16 @@ function buildConfig(isProduction = false) {
     },
   }
   const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL)
-  if (databaseUrl) {
-    process.env.DATABASE_URL = databaseUrl
-    return {
-      ...base,
-      client: 'pg',
-      connection: {
-        connectionString: databaseUrl,
-        ssl: isProduction ? { rejectUnauthorized: false } : false,
-      },
-    }
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required to configure the database.')
   }
+  process.env.DATABASE_URL = databaseUrl
   return {
     ...base,
     client: 'pg',
     connection: {
-      host: process.env.DB_HOST || '127.0.0.1',
-      port: process.env.DB_PORT || 5432,
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME || 'postgres',
+      connectionString: databaseUrl,
+      ssl: isProduction ? { rejectUnauthorized: false } : false,
     },
   }
 }
@@ -42,7 +32,10 @@ module.exports = {
   development: buildConfig(),
   production: {
     client: 'pg',
-    connection: { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } },
+    connection: {
+      connectionString: normalizeDatabaseUrl(process.env.DATABASE_URL),
+      ssl: { rejectUnauthorized: false },
+    },
     pool: {
       min: 2,
       max: 10,
